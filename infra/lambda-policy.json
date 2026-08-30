@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WriteRegistrationsTableOnly",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-1:000000000000:table/dlp-registrations"
+    },
+    {
+      "Sid": "WriteOwnLogsOnly",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:000000000000:log-group:/aws/lambda/dlp-registration-processor:*"
+    }
+  ]
+}

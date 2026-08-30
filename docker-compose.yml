@@ -1,0 +1,49 @@
+# ============================================================
+# Digital Literacy Programme — Registration Service
+# Local development environment
+#
+# Group 5, 4CPS501B Cloud Computing
+# Owner: Sanele Ngcobo (Cloud platform and security lead)
+#
+# Start:  docker compose up -d
+# Stop:   docker compose down
+# Wipe:   docker compose down -v
+# ============================================================
+
+services:
+  localstack:
+    container_name: dlp-localstack
+
+    # VERSION IS PINNED DELIBERATELY.
+    # LocalStack moved to calendar versioning in March 2026, and the
+    # `latest` tag now tracks tagged releases rather than a fixed build.
+    # An unpinned image means members can silently run different
+    # versions, which breaks reproducibility. Any change to this
+    # version requires a decision record in docs/decisions/.
+    image: localstack/localstack:${LOCALSTACK_VERSION:-4.14.0}
+
+    ports:
+      # Bound to 127.0.0.1, not 0.0.0.0, so the emulated cloud is
+      # reachable only from this machine and not from the network.
+      - "127.0.0.1:4566:4566"
+
+    environment:
+      - SERVICES=lambda,dynamodb,apigateway,logs,iam,sts
+      - DEBUG=${LOCALSTACK_DEBUG:-0}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+    volumes:
+      # Runtime state. Gitignored — regenerated on every rebuild.
+      - "./volume:/var/lib/localstack"
+      # LocalStack starts Lambda containers, so it needs the Docker socket.
+      # This grants the container significant host privilege; acceptable
+      # for local development only. Noted in the security checklist.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s

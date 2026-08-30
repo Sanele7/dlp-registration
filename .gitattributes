@@ -1,0 +1,20 @@
+# Normalise line endings so Windows members do not break shell scripts.
+# Without this, a script edited on Windows gains CRLF endings and fails
+# inside the Linux container with a confusing "command not found" error.
+
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.py      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.md      text eol=lf
+
+*.bat     text eol=crlf
+*.ps1     text eol=crlf
+
+*.png     binary
+*.jpg     binary
+*.pdf     binary
+*.zip     binary

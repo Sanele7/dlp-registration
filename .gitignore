@@ -1,0 +1,63 @@
+# ============================================================
+# SECRETS — never commit these. Check before every push.
+# ============================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials
+credentials.json
+aws-credentials*
+secrets.*
+*.secret
+
+# AWS
+.aws/
+.localstack/
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ============================================================
+# LocalStack runtime state — regenerated, never committed
+# ============================================================
+volume/
+localstack-volume/
+tmp/
+
+# ============================================================
+# Build artefacts
+# ============================================================
+*.zip
+lambda-package/
+
+# ============================================================
+# Editors and OS
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
