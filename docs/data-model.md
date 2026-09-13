@@ -21,3 +21,6 @@ A single sentinel row in the same table tracks remaining seats.
 Seat allocation MUST use a DynamoDB conditional update against this row
 (decrement only if remaining > 0) to avoid a race condition when two
 applications arrive for the last seat at the same time.
+
+## Status
+The capacity counter row was manually initialized on 2026-09-13 with `remaining = 10`, ahead of the function being deployed. Verified with `awslocal dynamodb scan --table-name dlp-registrations`.
