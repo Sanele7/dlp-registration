@@ -7,8 +7,7 @@
       "Action": [
         "dynamodb:PutItem",
         "dynamodb:GetItem",
-        "dynamodb:UpdateItem",
-        "dynamodb:Query"
+        "dynamodb:UpdateItem"
       ],
       "Resource": "arn:aws:dynamodb:us-east-1:000000000000:table/dlp-registrations"
     },
