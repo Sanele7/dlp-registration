@@ -4,10 +4,11 @@ flowchart TB
     end
 
     subgraph trusted["TRUST BOUNDARY"]
-        B["API endpoint<br/>receives request<br/>invokes processor"]
-        C["Registration processor<br/>STATELESS<br/>─────────────<br/>validate payload<br/>verify ID checksum<br/>derive age<br/>compute APS<br/>check duplicate<br/>atomic capacity check"]
-        D[("Registration store<br/>─────────────<br/>accepted + rejected records<br/>place counter<br/>DURABLE STATE")]
-        E["Log and metric sink<br/>─────────────<br/>correlation ID<br/>decision + reason<br/>UTC timestamp"]
+        B["API Gateway<br/>receives request<br/>invokes Lambda"]
+        C["Lambda — registration processor<br/>STATELESS<br/>─────────────<br/>validate payload<br/>verify ID checksum<br/>derive age<br/>compute APS<br/>check duplicate"]
+        D[("DynamoDB<br/>─────────────<br/>registration records<br/>DURABLE STATE")]
+        G[("DynamoDB<br/>─────────────<br/>capacity counter<br/>single sentinel row")]
+        E["CloudWatch Logs<br/>─────────────<br/>correlation ID<br/>decision + reason<br/>UTC timestamp"]
     end
 
     subgraph outside["OUTSIDE SYSTEM BOUNDARY — not implemented"]
@@ -16,9 +17,10 @@ flowchart TB
 
     A -->|"HTTPS POST /registrations<br/>JSON payload"| B
     B -->|"invoke with event"| C
-    C -->|"conditional write<br/>fails if full or duplicate"| D
+    C -->|"conditional UpdateItem<br/>decrement only if remaining > 0<br/>ATOMIC — prevents over-enrolment"| G
+    G -.->|"success or<br/>ConditionalCheckFailed"| C
+    C -->|"PutItem — registration record"| D
     C -->|"structured log<br/>accept / reject / error"| E
-    D -.->|"write outcome"| C
     C -->|"201 PROVISIONALLY_ACCEPTED<br/>422 REJECTED + reason<br/>409 DUPLICATE / FULL<br/>503 SERVICE_UNAVAILABLE"| B
     B -->|"HTTPS response<br/>+ correlation ID"| A
     D -.->|"record looked up<br/>by correlation ID"| F
@@ -27,5 +29,6 @@ flowchart TB
     style B fill:#E6F1FB,stroke:#185FA5,color:#042C53
     style C fill:#EEEDFE,stroke:#534AB7,color:#26215C
     style D fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+    style G fill:#E1F5EE,stroke:#0F6E56,color:#04342C
     style E fill:#E1F5EE,stroke:#0F6E56,color:#04342C
     style F fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
