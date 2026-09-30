@@ -54,10 +54,14 @@ else
 fi
 
 echo "==> Applying least-privilege IAM policy"
-# The function may write to one named table and nothing else.
-# Deliberately NOT dynamodb:* and NOT Resource: "*".
+# Re-apply the policy on every setup so an existing local role also receives
+# newly required permissions without granting broader access.
 if aws_local iam get-role --role-name dlp-lambda-role > /dev/null 2>&1; then
-  echo "    role already exists, skipping"
+  aws_local iam put-role-policy \
+    --role-name dlp-lambda-role \
+    --policy-name dlp-registration-write \
+    --policy-document file://infra/lambda-policy.json > /dev/null
+  echo "    policy refreshed"
 else
   aws_local iam create-role \
     --role-name dlp-lambda-role \
@@ -66,7 +70,7 @@ else
     --role-name dlp-lambda-role \
     --policy-name dlp-registration-write \
     --policy-document file://infra/lambda-policy.json > /dev/null
-  echo "    created"
+  echo "    role created"
 fi
 
 echo "==> Initialising capacity counter"
