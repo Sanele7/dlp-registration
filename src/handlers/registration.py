@@ -26,7 +26,8 @@ TABLE_NAME = os.getenv("REGISTRATIONS_TABLE", "dlp-registrations")
 CAPACITY_KEY = "CAPACITY#programme"
 PROGRAMME_CAPACITY = int(os.getenv("PROGRAMME_CAPACITY", "10"))
 
-_dynamodb = boto3.resource("dynamodb")
+DYNAMODB_ENDPOINT = os.getenv("DYNAMODB_ENDPOINT")
+_dynamodb = boto3.resource("dynamodb", endpoint_url=DYNAMODB_ENDPOINT) if DYNAMODB_ENDPOINT else boto3.resource("dynamodb")
 _table = _dynamodb.Table(TABLE_NAME)
 
 
@@ -128,7 +129,7 @@ def _reserve_seat_and_store(item: dict) -> None:
     a seat.
     """
     try:
-        _dynamodb.meta.client.transact_write_items(
+        boto3.client("dynamodb", endpoint_url=DYNAMODB_ENDPOINT).transact_write_items(
             TransactItems=[
                 {
                     "Put": {
@@ -141,17 +142,16 @@ def _reserve_seat_and_store(item: dict) -> None:
                     "Update": {
                         "TableName": TABLE_NAME,
                         "Key": {"idHash": {"S": CAPACITY_KEY}},
-                        "UpdateExpression": "SET #remaining = #remaining - :one",
+                        "UpdateExpression": "ADD #remaining :one",
                         "ConditionExpression": "#remaining > :zero",
                         "ExpressionAttributeNames": {"#remaining": "remaining"},
                         "ExpressionAttributeValues": {
-                            ":one": {"N": "1"},
+                            ":one": {"N": "-1"},
                             ":zero": {"N": "0"},
                         },
                     }
                 },
-            ],
-            ClientRequestToken=item["correlationId"],
+            ]
         )
     except _dynamodb.meta.client.exceptions.TransactionCanceledException as exc:
         raise _TransactionRejected() from exc
