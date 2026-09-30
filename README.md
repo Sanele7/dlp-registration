@@ -118,3 +118,70 @@ sed -i 's/\r$//' scripts/*.sh
 | Function development | Bandile Shezi |
 | Data and observability | Unam Mkhomanzi |
 | QA, cost and documentation | Siphokazi Zothile Mongisa Majozi |
+
+## Milestone 3 — working vertical slice
+
+The integrated path is:
+
+`Client → API Gateway → Lambda → DynamoDB`
+
+Lambda emits structured CloudWatch-compatible logs containing a correlation ID, outcome and reason. The same correlation ID is returned to the client and can be used to trace the request.
+
+### Local API
+
+After `./scripts/setup.sh`, the script prints the API endpoint:
+
+```text
+http://localhost:4566/restapis/<api-id>/local/_user_request_/registrations
+```
+
+Send a registration:
+
+```bash
+curl -X POST "http://localhost:4566/restapis/<api-id>/local/_user_request_/registrations" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "nationalId": "0303155029083",
+    "subjectResults": [
+      {"subject":"englishHomeLanguage","percentage":50},
+      {"subject":"mathematics","percentage":40},
+      {"subject":"physicalSciences","percentage":40},
+      {"subject":"lifeSciences","percentage":40},
+      {"subject":"geography","percentage":40},
+      {"subject":"isiZulu","percentage":40},
+      {"subject":"lifeOrientation","percentage":70}
+    ]
+  }'
+```
+
+Expected normal response: HTTP `201`, `status: CONFIRMED`, an APS value and a `correlationId`.
+
+### Milestone 3 integration test
+
+After setup, run:
+
+```bash
+bash tests/integration/test_milestone3.sh
+```
+
+The test covers:
+- normal registration;
+- duplicate registration;
+- invalid input;
+- simulated DynamoDB store outage returning HTTP `503`.
+
+The test uses synthetic data only.
+
+### Reproduction by a second member
+
+A second member should clone the repository and independently execute:
+
+```bash
+cp .env.example .env
+docker compose up -d
+./scripts/setup.sh
+./scripts/verify.sh
+bash tests/integration/test_milestone3.sh
+```
+
+Record the member, machine/date, commands used and result in the Milestone 3 evidence pack.
