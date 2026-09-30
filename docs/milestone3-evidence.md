@@ -60,3 +60,35 @@ Notes/blockers: ____________________
 ## Important evidence rule
 
 Use synthetic data only. Do not capture real identity numbers, credentials, access keys or populated .env files. Screenshots should retain enough service context to prove what is being demonstrated.
+
+## Data and Observability Evidence (Unam)
+
+### E2 — Valid request
+
+- HTTP status: `201`
+- Response status: `CONFIRMED`
+- APS: `19`
+- Correlation ID: `8ee3ee60-369f-4a37-b925-ecc0aef6afc3`
+- Synthetic test data was used.
+
+### E3 — Processing trace
+
+Lambda structured logging recorded the same correlation ID:
+
+```text
+{"correlationId":"8ee3ee60-369f-4a37-b925-ecc0aef6afc3","timestamp":"2026-09-30T20:58:38.897743+00:00","outcome":"CONFIRMED","reason":null,"idHashPrefix":"b8da3a"}
+```
+This confirms trace continuity between the API response and Lambda processing.
+
+### E4 — Durable result
+
+DynamoDB stored the registration record:
+
+- `idHash`: `b8da3a2b07b2e82351eb8b4de9d1866d0be545340ff54a2329be9bd19126bf82`
+- `correlationId`: `8ee3ee60-369f-4a37-b925-ecc0aef6afc3`
+- `aps`: `19`
+- `status`: `CONFIRMED`
+- `timestamp`: `2026-09-30T20:58:38.897743+00:00`
+
+The capacity counter showed `remaining=9` after the successful registration.
+
