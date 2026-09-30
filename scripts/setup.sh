@@ -100,8 +100,29 @@ else
   fi
 fi
 
+echo "==> Configuring API Gateway route: POST /registrations"
+API_NAME="${API_GATEWAY_NAME:-dlp-registration-api}"
+STAGE="${API_GATEWAY_STAGE:-local}"
+
+API_ID="$(aws_local apigateway get-rest-apis --query "items[?name=='${API_NAME}'].id | [0]" --output text 2>/dev/null || true)"
+if [ -z "$API_ID" ] || [ "$API_ID" = "None" ]; then
+  API_ID="$(aws_local apigateway create-rest-api --name "$API_NAME" --endpoint-configuration types=REGIONAL --query id --output text)"
+  ROOT_ID="$(aws_local apigateway get-resources --rest-api-id "$API_ID" --query "items[?path=='/'].id | [0]" --output text)"
+  RESOURCE_ID="$(aws_local apigateway create-resource --rest-api-id "$API_ID" --parent-id "$ROOT_ID" --path-part registrations --query id --output text)"
+  aws_local apigateway put-method --rest-api-id "$API_ID" --resource-id "$RESOURCE_ID" --http-method POST --authorization-type NONE > /dev/null
+  LAMBDA_ARN="$(aws_local lambda get-function --function-name "$FUNCTION" --query 'Configuration.FunctionArn' --output text)"
+  INTEGRATION_URI="arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${LAMBDA_ARN}/invocations"
+  aws_local apigateway put-integration --rest-api-id "$API_ID" --resource-id "$RESOURCE_ID" --http-method POST --type AWS_PROXY --integration-http-method POST --uri "$INTEGRATION_URI" > /dev/null
+  aws_local lambda add-permission --function-name "$FUNCTION" --statement-id "apigateway-${API_ID}" --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn "arn:aws:execute-api:${REGION}:000000000000:${API_ID}/*/POST/registrations" > /dev/null 2>&1 || true
+  aws_local apigateway create-deployment --rest-api-id "$API_ID" --stage-name "$STAGE" > /dev/null
+  echo "    created: $API_ID"
+else
+  echo "    already exists: $API_ID"
+fi
+
 echo ""
 echo "Setup complete."
 echo "  Endpoint: ${ENDPOINT}"
 echo "  Table:    ${TABLE}"
 echo "  Function: ${FUNCTION}"
+echo "  API:      http://localhost:4566/restapis/${API_ID}/${STAGE}/_user_request_/registrations"
