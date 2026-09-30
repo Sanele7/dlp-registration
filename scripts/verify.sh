@@ -12,6 +12,8 @@ if [ -f .env ]; then set -a; source .env; set +a; fi
 
 ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localhost:4566}"
 TABLE="${REGISTRATIONS_TABLE:-dlp-registrations}"
+API_NAME="${API_GATEWAY_NAME:-dlp-registration-api}"
+API_STAGE="${API_GATEWAY_STAGE:-local}"
 
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
@@ -33,6 +35,8 @@ check "LocalStack container is up" "docker ps --filter name=dlp-localstack --fil
 check "LocalStack is healthy"      "curl -sf ${ENDPOINT}/_localstack/health"
 check "DynamoDB table exists"      "aws --endpoint-url=${ENDPOINT} dynamodb describe-table --table-name ${TABLE}"
 check "IAM role exists"            "aws --endpoint-url=${ENDPOINT} iam get-role --role-name dlp-lambda-role"
+check "Lambda function exists"       "aws --endpoint-url=${ENDPOINT} lambda get-function --function-name ${LAMBDA_FUNCTION_NAME:-dlp-registration-processor}"
+check "API Gateway exists"           "aws --endpoint-url=${ENDPOINT} apigateway get-rest-apis --query \"items[?name==\x27${API_NAME}\x27]\" | grep -q ${API_NAME}"
 
 echo "------------------------"
 echo "  ${PASS} passed, ${FAIL} failed"
