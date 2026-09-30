@@ -36,7 +36,7 @@ check "LocalStack is healthy"      "curl -sf ${ENDPOINT}/_localstack/health"
 check "DynamoDB table exists"      "aws --endpoint-url=${ENDPOINT} dynamodb describe-table --table-name ${TABLE}"
 check "IAM role exists"            "aws --endpoint-url=${ENDPOINT} iam get-role --role-name dlp-lambda-role"
 check "Lambda function exists"       "aws --endpoint-url=${ENDPOINT} lambda get-function --function-name ${LAMBDA_FUNCTION_NAME:-dlp-registration-processor}"
-check "API Gateway exists"           "aws --endpoint-url=${ENDPOINT} apigateway get-rest-apis --query \"items[?name==\x27${API_NAME}\x27]\" | grep -q ${API_NAME}"
+check "API Gateway exists" "aws --endpoint-url=${ENDPOINT} apigateway get-rest-apis --output text | grep -q ${API_NAME}"
 
 echo "------------------------"
 echo "  ${PASS} passed, ${FAIL} failed"
