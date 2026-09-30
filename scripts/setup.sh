@@ -69,6 +69,11 @@ else
   echo "    created"
 fi
 
+echo "==> Initialising capacity counter"
+aws_local dynamodb put-item \
+  --table-name "$TABLE" \
+  --item "{\"idHash\":{\"S\":\"CAPACITY#programme\"},\"remaining\":{\"N\":\"${PROGRAMME_CAPACITY:-10}\"}}" \
+  --condition-expression "attribute_not_exists(idHash)" > /dev/null 2>&1 || true
 echo "==> Deploying Lambda function: ${FUNCTION}"
 if [ ! -f src/handlers/registration.py ]; then
   echo "    SKIPPED — src/handlers/registration.py does not exist yet."
