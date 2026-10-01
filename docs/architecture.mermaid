@@ -21,7 +21,7 @@ flowchart TB
     G -.->|"success or<br/>ConditionalCheckFailed"| C
     C -->|"PutItem — registration record"| D
     C -->|"structured log<br/>accept / reject / error"| E
-    C -->|"201 PROVISIONALLY_ACCEPTED<br/>422 REJECTED + reason<br/>409 DUPLICATE / FULL<br/>503 SERVICE_UNAVAILABLE"| B
+    C -->|"201 CONFIRMED<br/>422 REJECTED + reason<br/>409 DUPLICATE / FULL<br/>503 SERVICE_UNAVAILABLE"| B
     B -->|"HTTPS response<br/>+ correlation ID"| A
     D -.->|"record looked up<br/>by correlation ID"| F
 
