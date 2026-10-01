@@ -1,0 +1,12 @@
+HTTP/1.1 503 SERVICE UNAVAILABLE
+Server: TwistedWeb/25.5.0
+Date: Thu, 01 Oct 2026 12:32:45 GMT
+Content-Type: application/json
+Connection: keep-alive
+Content-Length: 112
+x-amzn-RequestId: 4edfebb4-741e-406f-ae22-f104faebcf31
+x-amz-apigw-id: a1a4729d=
+X-Amzn-Trace-Id: Root=1-6abe52ed-cffe5c194b3a015d79b0001d;Parent=7fff0088236375b5;Sampled=0
+x-localstack: true
+
+{"correlationId": "5dfe2490-70d1-4b92-843e-cc25d748c261", "status": "REJECTED", "reason": "STORAGE_UNAVAILABLE"}
