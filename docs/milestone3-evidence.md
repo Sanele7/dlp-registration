@@ -47,15 +47,15 @@ Then retrieve the relevant log events and retain the correlation ID as the trace
 
 ## Reproduction record
 
-Second member: Sanele Ngcobo
+Second member: Siphokazi Zothile Mongisa Majozi
 
-Date/time: 1 October 2026, ~15:00 SAST
+Date/time: 1 October 2026, ~15:30 SAST
 
-Machine/OS: Linux (hostname `impunga-yehlathi`), separate machine and user account from the original development environment
+Machine/OS: Linux (hostname `d3d3-OptiPlex-3070`), separate machine and user account from the original development environment
 
 Result: PASS
 
-Notes/blockers: Fresh `git clone` of the repository, followed by the exact commands in this document (`cp .env.example .env`, `docker compose up -d`, `./scripts/setup.sh`, `./scripts/verify.sh`, `bash tests/integration/test_milestone3.sh`), with no manual fixes required. `verify.sh` reported 7/7 checks passing. The integration test passed all four cases: normal (`201 CONFIRMED`, correlation ID `40286258-f947-403e-b0b3-41dd3b32169a`), duplicate (`409`), invalid (`422`), and simulated store outage (`503`).
+Notes/blockers: Fresh `git clone` of the repository. The AWS CLI was not pre-installed on this machine and had to be installed first (AWS CLI v2.37.7, via the official installer) before `setup.sh` and `verify.sh` could run. After that, all steps completed with no code changes required: `verify.sh` reported 7/7 checks passing, and the integration test passed all four cases: normal (`201 CONFIRMED`, correlation ID `5a9de8cd-f865-4ddc-abe5-1064996d14eb`), duplicate (`409`), invalid (`422`), and simulated store outage (`503`).
 
 ## Important evidence rule
 
