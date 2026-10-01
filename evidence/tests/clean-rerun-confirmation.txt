@@ -1,0 +1,2 @@
+E2E test: POST http://localhost:4566/restapis/gwsckwav9x/local/_user_request_/registrations
+FAIL normal case: 409 {"correlationId": "364cf463-b37c-4997-8e1f-7da5480c353f", "status": "REJECTED", "reason": "DUPLICATE"}
