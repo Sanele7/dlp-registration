@@ -47,15 +47,15 @@ Then retrieve the relevant log events and retain the correlation ID as the trace
 
 ## Reproduction record
 
-Second member: ____________________
+Second member: Sanele Ngcobo
 
-Date/time: ____________________
+Date/time: 1 October 2026, ~15:00 SAST
 
-Machine/OS: ____________________
+Machine/OS: Linux (hostname `impunga-yehlathi`), separate machine and user account from the original development environment
 
-Result: PASS / FAIL
+Result: PASS
 
-Notes/blockers: ____________________
+Notes/blockers: Fresh `git clone` of the repository, followed by the exact commands in this document (`cp .env.example .env`, `docker compose up -d`, `./scripts/setup.sh`, `./scripts/verify.sh`, `bash tests/integration/test_milestone3.sh`), with no manual fixes required. `verify.sh` reported 7/7 checks passing. The integration test passed all four cases: normal (`201 CONFIRMED`, correlation ID `40286258-f947-403e-b0b3-41dd3b32169a`), duplicate (`409`), invalid (`422`), and simulated store outage (`503`).
 
 ## Important evidence rule
 
