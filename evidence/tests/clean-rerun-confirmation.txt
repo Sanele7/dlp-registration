@@ -1,2 +1,8 @@
-E2E test: POST http://localhost:4566/restapis/gwsckwav9x/local/_user_request_/registrations
-FAIL normal case: 409 {"correlationId": "364cf463-b37c-4997-8e1f-7da5480c353f", "status": "REJECTED", "reason": "DUPLICATE"}
+E2E test: POST http://localhost:4566/restapis/aqowbpgrj1/local/_user_request_/registrations
+PASS normal case: 201 {"correlationId": "1e9bcbaf-f277-4803-beb8-223d91e1aef2", "status": "CONFIRMED", "aps": 19}
+Correlation ID: 1e9bcbaf-f277-4803-beb8-223d91e1aef2
+PASS duplicate case: 409
+PASS invalid case: 422
+Simulating store outage with an unavailable DynamoDB table...
+PASS store-outage case: 503
+All Milestone 3 integration checks passed.
