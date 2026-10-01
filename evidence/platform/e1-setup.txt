@@ -1,0 +1,22 @@
+cp .env.example .env
+docker compose up -d
+./scripts/setup.sh
+[+] up 1/1
+ ✔ Container dlp-localstack Started                                                                 0.6s
+==> Waiting for LocalStack to become healthy
+    ready
+==> Creating DynamoDB table: dlp-registrations
+    created
+==> Applying least-privilege IAM policy
+    role created
+==> Initialising capacity counter
+==> Deploying Lambda function: dlp-registration-processor
+    created
+==> Configuring API Gateway route: POST /registrations
+    created: srb6j6ith4
+
+Setup complete.
+  Endpoint: http://localhost:4566
+  Table:    dlp-registrations
+  Function: dlp-registration-processor
+  API:      http://localhost:4566/restapis/srb6j6ith4/local/_user_request_/registrations
