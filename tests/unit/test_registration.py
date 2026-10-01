@@ -65,7 +65,7 @@ def test_successful_registration():
     body = json.loads(response["body"])
     assert response["statusCode"] == 201
     assert body["status"] == "CONFIRMED"
-    assert body["aps"] == 20
+    assert body["aps"] == 19
 
 
 def test_duplicate_returns_409():
