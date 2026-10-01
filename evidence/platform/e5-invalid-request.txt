@@ -1,0 +1,26 @@
+HTTP/1.1 422 UNPROCESSABLE ENTITY
+Server: TwistedWeb/25.5.0
+Date: Thu, 01 Oct 2026 12:28:42 GMT
+Content-Type: application/json
+Connection: keep-alive
+Content-Length: 112
+x-amzn-RequestId: 82d21b6c-9bfb-4c1b-a9d8-96c73700f7c3
+x-amz-apigw-id: 74617e5c=
+X-Amzn-Trace-Id: Root=1-6abe51fa-5ab3c4a10a3e7bc6f68058a3;Parent=d193f356280a886f;Sampled=0
+x-localstack: true
+
+{"correlationId": "05240127-bc83-4d44-b8ed-a2f8738a1a01", "status": "REJECTED", "reason": "INVALID_NATIONAL_ID"}{
+    "Items": [
+        {
+            "idHash": {
+                "S": "CAPACITY#programme"
+            },
+            "remaining": {
+                "N": "10"
+            }
+        }
+    ],
+    "Count": 1,
+    "ScannedCount": 1,
+    "ConsumedCapacity": null
+}
