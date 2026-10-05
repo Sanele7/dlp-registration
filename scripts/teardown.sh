@@ -14,7 +14,13 @@ echo "==> Stopping containers and removing volumes"
 docker compose down -v
 
 echo "==> Removing local runtime state"
-rm -rf ./volume
+# LocalStack writes ./volume as root inside the container, so a plain rm
+# can fail with "Permission denied" for the invoking user. Try rm first,
+# then fall back to deleting through a throwaway container.
+if ! rm -rf ./volume 2>/dev/null; then
+  docker run --rm -v "$PWD/volume:/v" alpine sh -c 'rm -rf /v/* /v/.[!.]* 2>/dev/null; true' >/dev/null 2>&1 || true
+  rm -rf ./volume 2>/dev/null || true
+fi
 
 echo "==> Verifying nothing remains"
 REMAINING=$(docker ps -a --filter "name=dlp-" --format "{{.Names}}" || true)
