@@ -15,3 +15,13 @@
 ## Rejection detail (added in Milestone 4)
 
 Every rejection response may include an optional `detail` field: a plain-language explanation for the applicant (for example, which part of the national ID failed, or the applicant's APS against the ceiling of 20). The `reason` codes and status codes are unchanged, so existing clients are unaffected. `detail` never contains the national ID.
+
+
+## Residence, reference number and PIN (added in Milestone 4)
+
+- Request field `fromKwaDlangezwa` (boolean, required). `false` → 422 `NOT_RESIDENT`.
+- A successful registration (201) also returns `reference` (`DLP-` + 8 characters), a one-time 6-digit `pin`, and `nextSteps` (bring the required documents, including proof of residence, to the branch helpdesk).
+- The PIN is stored only as a salted PBKDF2 hash. The reference lookup item is `REF#<reference>` in the same table.
+- `POST /registrations/status` with `{"reference", "pin"}` returns 200 with `status`, `aps`, `registeredAt`, `nextSteps`. A wrong PIN and an unknown reference both return 404 `NOT_FOUND` (no enumeration). After 5 wrong PINs the reference is locked: 423 `TOO_MANY_ATTEMPTS`.
+- New reasons: `NOT_RESIDENT`, `AGE_NOT_ELIGIBLE`, `NOT_FOUND`, `TOO_MANY_ATTEMPTS`.
+- Programme capacity is 5 seats (`PROGRAMME_CAPACITY`).

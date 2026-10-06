@@ -80,13 +80,23 @@ serious professional error, not a minor deduction.
 
 ---
 
-### Register a student from the command line
+### Register a student and check an application
 
 ```bash
 ./scripts/register.sh
 ```
 
-It asks for the 13-digit national ID and the seven subject percentages (English, Mathematics, Physical Sciences, Life Sciences, Geography, isiZulu, Life Orientation), then prints the result. Non-interactive form: `./scripts/register.sh 0303155029083 60 50 50 50 50 50 70`.
+It first asks **"Are you from KwaDlangezwa?"**. Answering *no* ends the application with the reason. Answering *yes* it asks for the 13-digit national ID and the seven subject percentages (English, Mathematics, Physical Sciences, Life Sciences, Geography, isiZulu, Life Orientation). On success it prints a **reference number** and a **6-digit PIN** (shown once) and reminds the student to bring the required documents, including proof of residence, to the branch helpdesk.
+
+Non-interactive: `./scripts/register.sh yes 0303155029083 60 50 50 50 50 50 70` or `./scripts/register.sh no`.
+
+To check an application later, with the reference and PIN:
+
+```bash
+./scripts/check-status.sh
+```
+
+The programme has **5 seats** by default (`PROGRAMME_CAPACITY` in `.env`; the demo uses 5).
 
 ## Troubleshooting
 

@@ -7,6 +7,8 @@
 #   T5-T8   Invalid-input cases (each proves NO durable state was written)
 #   T9      Dependency failure (store unavailable -> 503, state untouched)
 #   T10     Recovery (same request succeeds once the store is back)
+#   T15     Application status check (reference + PIN, lockout)
+#   T16     Programme capacity (session full)
 #   T11-T13 Security / control checks (least-privilege IAM, no ID in logs,
 #           secret scan)
 #   T14     Teardown / rebuild (destroy everything, recreate the slice)
@@ -29,7 +31,7 @@ TABLE="${REGISTRATIONS_TABLE:-dlp-registrations}"
 FUNCTION="${LAMBDA_FUNCTION_NAME:-dlp-registration-processor}"
 API_NAME="${API_GATEWAY_NAME:-dlp-registration-api}"
 STAGE="${API_GATEWAY_STAGE:-local}"
-CAPACITY="${PROGRAMME_CAPACITY:-10}"
+CAPACITY="${PROGRAMME_CAPACITY:-5}"
 
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
@@ -51,6 +53,25 @@ resolve_base() {
   BASE="$ENDPOINT/restapis/$API_ID/$STAGE/_user_request_/registrations"
 }
 
+gen_id() { # random synthetic eligible-age ID with a valid checksum
+  python3 - <<'PY'
+import random, datetime
+y = datetime.date.today().year - random.randint(20, 24)
+body = "%02d%02d%02d%04d08" % (y % 100, random.randint(1, 12), random.randint(1, 28), random.randint(0, 9999))
+for c in range(10):
+    d = [int(x) for x in body + str(c)]
+    if sum(x if i % 2 == 0 else (x*2-9 if x*2 > 9 else x*2) for i, x in enumerate(reversed(d))) % 10 == 0:
+        print(body + str(c)); break
+PY
+}
+
+post_status() { # json body ; sets STATUS and BODY
+  local r
+  r="$(curl -sS -w '\n%{http_code}' -X POST "$BASE/status" -H 'Content-Type: application/json' -d "$1")"
+  STATUS="$(printf '%s\n' "$r" | tail -n1)"
+  BODY="$(printf '%s\n' "$r" | sed '$d')"
+}
+
 post() { # payload ; sets STATUS and BODY
   local r
   r="$(curl -sS -w '\n%{http_code}' -X POST "$BASE" -H 'Content-Type: application/json' -d "$1")"
@@ -66,7 +87,7 @@ import json, sys
 nid, *v = sys.argv[1:]
 names = ["englishHomeLanguage", "mathematics", "physicalSciences", "lifeSciences",
          "geography", "isiZulu", "lifeOrientation"]
-print(json.dumps({"nationalId": nid,
+print(json.dumps({"fromKwaDlangezwa": True, "nationalId": nid,
                   "subjectResults": [{"subject": n, "percentage": int(x)} for n, x in zip(names, v)]}))
 PY
 }
@@ -102,6 +123,10 @@ post "$P1"
 expect T1 "normal: typical applicant returns 201" 201 "$STATUS"
 expect T1 "normal: APS 19" 19 "$(jget aps)"
 CID1="$(jget correlationId)"; echo "     correlationId: $CID1"
+REF1="$(jget reference)"; PIN1="$(jget pin)"
+expect T1 "response carries a reference number (DLP-XXXXXXXX)" yes "$(printf '%s' "$REF1" | grep -qE '^DLP-[A-Z2-9]{8}$' && echo yes || echo no)"
+expect T1 "response carries a 6-digit PIN" yes "$(printf '%s' "$PIN1" | grep -qE '^[0-9]{6}$' && echo yes || echo no)"
+expect T1 "response tells the student to bring documents (incl. proof of residence)" yes "$(jget nextSteps | grep -q 'proof of residence' && echo yes || echo no)"
 
 post "$(mk 0601205012086 35 32 38 41 33 30 60)"      # low scorer
 expect T2 "normal: low-scoring applicant returns 201" 201 "$STATUS"
@@ -111,7 +136,7 @@ post "$(mk 0508125123085 50 50 40 40 40 40 55)"      # exactly on the APS ceilin
 expect T3 "normal: boundary APS (=20, the ceiling) returns 201" 201 "$STATUS"
 expect T3 "normal: APS 20" 20 "$(jget aps)"
 
-expect T3 "3 registrations stored (+ capacity item)" 4 "$(item_count)"
+expect T3 "3 registrations stored (each + its reference lookup item) + capacity item" 7 "$(item_count)"
 expect T3 "seats left decremented by exactly 3" $((CAPACITY-3)) "$(seats_left)"
 echo
 
@@ -119,6 +144,7 @@ echo "--- Repeated user journey ---"
 post "$P1"
 expect T4 "same applicant again returns 409" 409 "$STATUS"
 expect T4 "reason DUPLICATE" DUPLICATE "$(jget reason)"
+expect T4 "duplicate message points the student to the reference/PIN check" yes "$(jget detail | grep -q 'reference number and PIN' && echo yes || echo no)"
 expect T4 "duplicate consumed no seat" $((CAPACITY-3)) "$(seats_left)"
 echo
 
@@ -130,7 +156,7 @@ post "$(mk 1234567890123 50 40 40 40 40 40 70)"
 expect T5 "invalid: ID fails checksum -> 422" 422 "$STATUS"
 expect T5 "reason INVALID_NATIONAL_ID" INVALID_NATIONAL_ID "$(jget reason)"
 
-post '{"nationalId":"0404276001082","subjectResults":[{"subject":"mathematics","percentage":50}]}'
+post '{"fromKwaDlangezwa":true,"nationalId":"0404276001082","subjectResults":[{"subject":"mathematics","percentage":50}]}'
 expect T6 "invalid: missing subjects -> 422" 422 "$STATUS"
 expect T6 "reason INVALID_PAYLOAD" INVALID_PAYLOAD "$(jget reason)"
 
@@ -138,7 +164,7 @@ post "$(mk 0404276001082 85 85 85 85 85 85 85)"
 expect T7 "invalid: APS above ceiling -> 422" 422 "$STATUS"
 expect T7 "reason APS_TOO_HIGH" APS_TOO_HIGH "$(jget reason)"
 
-post '{"nationalId":"0404276001082","subjectResults":[{"subject":"englishHomeLanguage","percentage":50},{"subject":"mathematics","percentage":40},{"subject":"physicalSciences","percentage":40},{"subject":"lifeSciences","percentage":40},{"subject":"geography","percentage":40},{"subject":"isiZulu","percentage":"abc"},{"subject":"lifeOrientation","percentage":70}]}'
+post '{"fromKwaDlangezwa":true,"nationalId":"0404276001082","subjectResults":[{"subject":"englishHomeLanguage","percentage":50},{"subject":"mathematics","percentage":40},{"subject":"physicalSciences","percentage":40},{"subject":"lifeSciences","percentage":40},{"subject":"geography","percentage":40},{"subject":"isiZulu","percentage":"abc"},{"subject":"lifeOrientation","percentage":70}]}'
 expect T8 "invalid: wrong type for a percentage -> 422" 422 "$STATUS"
 expect T8 "reason INVALID_PAYLOAD" INVALID_PAYLOAD "$(jget reason)"
 
@@ -150,8 +176,29 @@ post "$(mk 1206105001087 50 40 40 40 40 40 70)"
 expect T8c "invalid: applicant younger than the age limit -> 422" 422 "$STATUS"
 expect T8c "reason AGE_NOT_ELIGIBLE" AGE_NOT_ELIGIBLE "$(jget reason)"
 
+post '{"fromKwaDlangezwa":false}'
+expect T8d "invalid: applicant not from KwaDlangezwa -> 422" 422 "$STATUS"
+expect T8d "reason NOT_RESIDENT" NOT_RESIDENT "$(jget reason)"
+expect T8d "message explains the residence rule" yes "$(jget detail | grep -q 'residents of KwaDlangezwa' && echo yes || echo no)"
+
 expect T5-8 "no item written by any rejected request" "$BEFORE_ITEMS" "$(item_count)"
 expect T5-8 "no seat consumed by any rejected request" "$BEFORE_SEATS" "$(seats_left)"
+echo
+
+# ---- Application status check ------------------------------
+echo "--- Application status check (reference + PIN) ---"
+post_status "{\"reference\":\"$REF1\",\"pin\":\"$PIN1\"}"
+expect T15 "correct reference + PIN -> 200" 200 "$STATUS"
+expect T15 "status CONFIRMED" CONFIRMED "$(jget status)"
+expect T15 "status shows the APS" 19 "$(jget aps)"
+expect T15 "status response does not expose the national ID or its hash" no "$(printf '%s' "$BODY" | grep -qiE 'idHash|nationalId|0303155029083' && echo yes || echo no)"
+post_status "{\"reference\":\"$REF1\",\"pin\":\"000000\"}"
+expect T15 "wrong PIN -> 404 NOT_FOUND" NOT_FOUND "$(jget reason)"
+post_status '{"reference":"DLP-ZZZZZZZZ","pin":"123456"}'
+expect T15 "unknown reference answers exactly like a wrong PIN (no enumeration)" NOT_FOUND "$(jget reason)"
+for _ in 1 2 3 4; do post_status "{\"reference\":\"$REF1\",\"pin\":\"000000\"}"; done
+post_status "{\"reference\":\"$REF1\",\"pin\":\"$PIN1\"}"
+expect T15 "after 5 wrong PINs the reference is locked (even with the right PIN) -> 423" 423 "$STATUS"
 echo
 
 # ---- Dependency failure -----------------------------------
@@ -173,6 +220,17 @@ echo "--- Recovery ---"
 post "$P_OUT"
 expect T10 "same request succeeds after the store is restored -> 201" 201 "$STATUS"
 expect T10 "not treated as a duplicate (no partial state left by the outage)" CONFIRMED "$(jget status)"
+echo
+
+echo "--- Programme capacity (session full) ---"
+while [ "$(seats_left)" -gt 0 ] 2>/dev/null; do
+  post "$(mk "$(gen_id)" 50 40 40 40 40 40 70)"
+  [ "$STATUS" = "201" ] || { echo "unexpected status $STATUS while filling seats"; break; }
+done
+expect T16 "all $CAPACITY seats can be filled" 0 "$(seats_left)"
+post "$(mk "$(gen_id)" 50 40 40 40 40 40 70)"
+expect T16 "next eligible applicant -> 409" 409 "$STATUS"
+expect T16 "reason SESSION_FULL" SESSION_FULL "$(jget reason)"
 echo
 
 # ---- Security / control checks ----------------------------
@@ -200,6 +258,7 @@ for id in 0303155029083 0601205012086 0508125123085 0310015150082 0404276001082 
   if printf '%s' "$LOGS" | grep -q "$id"; then LEAKS=$((LEAKS+1)); fi
 done
 expect T12 "full national IDs never appear in Lambda logs" 0 "$LEAKS"
+expect T12 "reference numbers and PINs never appear in Lambda logs" 0 "$(printf '%s' "$LOGS" | grep -ciE "$REF1|\"pin\"|pinHash" | tr -d ' ')"
 expect T12 "logs do contain the correlation/hash-prefix trace" yes "$(printf '%s' "$LOGS" | grep -q idHashPrefix && echo yes || echo no)"
 
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then

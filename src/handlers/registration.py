@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import logging
 import os
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -28,7 +30,15 @@ LOG.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 TABLE_NAME = os.getenv("REGISTRATIONS_TABLE", "dlp-registrations")
 CAPACITY_KEY = "CAPACITY#programme"
-PROGRAMME_CAPACITY = int(os.getenv("PROGRAMME_CAPACITY", "10"))
+PROGRAMME_CAPACITY = int(os.getenv("PROGRAMME_CAPACITY", "5"))
+REF_PREFIX = "REF#"
+REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I to avoid misreading
+MAX_PIN_ATTEMPTS = 5
+NEXT_STEPS = (
+    "Please bring the required documents listed on the programme post, including "
+    "your proof of residence, to the branch helpdesk. Keep your reference number "
+    "and PIN safe: you need both to check your application."
+)
 MIN_AGE = int(os.getenv("MIN_AGE", "18"))
 MAX_AGE = int(os.getenv("MAX_AGE", "25"))
 
@@ -38,6 +48,13 @@ _table = _dynamodb.Table(TABLE_NAME)
 
 
 def handler(event, context):
+    route = str((event or {}).get("resource") or (event or {}).get("path") or "") if isinstance(event, dict) else ""
+    if route.rstrip("/").endswith("/status"):
+        return _status_handler(event)
+    return _register_handler(event)
+
+
+def _register_handler(event):
     correlation_id = str(uuid.uuid4())
     timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -47,6 +64,21 @@ def handler(event, context):
         return _failure(
             422, correlation_id, timestamp, "INVALID_PAYLOAD",
             detail="The request is not valid JSON.",
+        )
+
+    resident = payload.get("fromKwaDlangezwa")
+    if not isinstance(resident, bool):
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_PAYLOAD",
+            detail="Please answer whether you are from KwaDlangezwa (yes or no).",
+        )
+    if not resident:
+        return _failure(
+            422, correlation_id, timestamp, "NOT_RESIDENT",
+            detail=(
+                "This programme is only open to residents of KwaDlangezwa. "
+                "Your application cannot continue."
+            ),
         )
 
     national_id = payload.get("nationalId")
@@ -100,21 +132,34 @@ def handler(event, context):
     id_hash = hashlib.sha256(national_id.encode("utf-8")).hexdigest()
     id_hash_prefix = id_hash[:6]
 
+    reference = _new_reference()
+    pin = _new_pin()
+    salt = secrets.token_hex(8)
+
     item = {
         "idHash": id_hash,
         "status": "CONFIRMED",
         "aps": aps_result["aps_total"],
         "timestamp": timestamp,
         "correlationId": correlation_id,
+        "reference": reference,
+    }
+    ref_item = {
+        "idHash": REF_PREFIX + reference,
+        "status": "CONFIRMED",
+        "aps": aps_result["aps_total"],
+        "timestamp": timestamp,
+        "salt": salt,
+        "pinHash": _hash_pin(pin, salt),
     }
 
     try:
-        _reserve_seat_and_store(item)
+        _reserve_seat_and_store(item, ref_item)
     except _TransactionRejected:
         if _registration_exists(id_hash):
             return _failure(
                 409, correlation_id, timestamp, "DUPLICATE", id_hash_prefix,
-                detail="This national ID is already registered.",
+                detail="This national ID is already registered. Use your reference number and PIN to check your application.",
             )
 
         if _capacity_remaining() <= 0:
@@ -148,6 +193,9 @@ def handler(event, context):
             "correlationId": correlation_id,
             "status": "CONFIRMED",
             "aps": aps_result["aps_total"],
+            "reference": reference,
+            "pin": pin,
+            "nextSteps": NEXT_STEPS,
         },
     )
 
@@ -156,7 +204,7 @@ class _TransactionRejected(Exception):
     """The transaction was cancelled by a business-condition check."""
 
 
-def _reserve_seat_and_store(item: dict) -> None:
+def _reserve_seat_and_store(item: dict, ref_item: dict) -> None:
     """Atomically reserve one seat and create the registration record.
 
     The two writes are atomic: either both happen or neither happens.
@@ -170,6 +218,13 @@ def _reserve_seat_and_store(item: dict) -> None:
                     "Put": {
                         "TableName": TABLE_NAME,
                         "Item": _serialize_item(item),
+                        "ConditionExpression": "attribute_not_exists(idHash)",
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": TABLE_NAME,
+                        "Item": _serialize_ref_item(ref_item),
                         "ConditionExpression": "attribute_not_exists(idHash)",
                     }
                 },
@@ -199,7 +254,98 @@ def _serialize_item(item: dict) -> dict:
         "aps": {"N": str(item["aps"])},
         "timestamp": {"S": item["timestamp"]},
         "correlationId": {"S": item["correlationId"]},
+        "reference": {"S": item["reference"]},
     }
+
+
+def _serialize_ref_item(item: dict) -> dict:
+    return {
+        "idHash": {"S": item["idHash"]},
+        "status": {"S": item["status"]},
+        "aps": {"N": str(item["aps"])},
+        "timestamp": {"S": item["timestamp"]},
+        "salt": {"S": item["salt"]},
+        "pinHash": {"S": item["pinHash"]},
+        "failedAttempts": {"N": "0"},
+    }
+
+
+def _new_reference() -> str:
+    return "DLP-" + "".join(secrets.choice(REF_ALPHABET) for _ in range(8))
+
+
+def _new_pin() -> str:
+    return f"{secrets.randbelow(10**6):06d}"
+
+
+def _hash_pin(pin: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", pin.encode(), salt.encode(), 50_000).hex()
+
+
+def _status_handler(event):
+    """POST /registrations/status: an applicant checks their application
+    with the reference number and PIN issued at registration."""
+    correlation_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    try:
+        payload = _parse_payload(event)
+    except ValueError:
+        payload = {}
+    reference = payload.get("reference") if isinstance(payload, dict) else None
+    pin = payload.get("pin") if isinstance(payload, dict) else None
+    if not isinstance(reference, str) or not isinstance(pin, str) or not reference or not pin:
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_PAYLOAD",
+            detail="Please provide your reference number and PIN.",
+        )
+    reference = reference.strip().upper()
+    not_found = (
+        404, correlation_id, timestamp, "NOT_FOUND"
+    )
+    not_found_detail = "No application matches that reference number and PIN."
+
+    try:
+        response = _table.get_item(Key={"idHash": REF_PREFIX + reference}, ConsistentRead=True)
+    except (BotoCoreError, ClientError, Exception):
+        LOG.exception("Status lookup storage failure")
+        return _failure(
+            503, correlation_id, timestamp, "STORAGE_UNAVAILABLE",
+            detail="The registration store is temporarily unavailable. Please try again shortly.",
+        )
+    record = response.get("Item")
+    if not record:
+        return _failure(*not_found, detail=not_found_detail)
+
+    if int(record.get("failedAttempts", 0)) >= MAX_PIN_ATTEMPTS:
+        return _failure(
+            423, correlation_id, timestamp, "TOO_MANY_ATTEMPTS",
+            detail="Too many wrong PIN attempts. Please contact the branch helpdesk.",
+        )
+
+    if not hmac.compare_digest(_hash_pin(pin, record["salt"]), record["pinHash"]):
+        try:
+            _table.update_item(
+                Key={"idHash": REF_PREFIX + reference},
+                UpdateExpression="ADD failedAttempts :one",
+                ExpressionAttributeValues={":one": 1},
+            )
+        except Exception:
+            LOG.exception("Could not record failed PIN attempt")
+        return _failure(*not_found, detail=not_found_detail)
+
+    _log_decision(correlation_id, timestamp, "STATUS_VIEWED", None, None)
+    return _response(
+        200,
+        {
+            "correlationId": correlation_id,
+            "reference": reference,
+            "status": record["status"],
+            "aps": int(record["aps"]),
+            "registeredAt": record["timestamp"],
+            "nextSteps": NEXT_STEPS,
+        },
+    )
 
 
 def _registration_exists(id_hash: str) -> bool:

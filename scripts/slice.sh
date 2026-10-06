@@ -54,7 +54,7 @@ BASE="$ENDPOINT/restapis/$API_ID/$STAGE/_user_request_/registrations"
 
 payload() { # nationalId
   cat <<JSON
-{"nationalId":"$1","subjectResults":[{"subject":"englishHomeLanguage","percentage":50},{"subject":"mathematics","percentage":40},{"subject":"physicalSciences","percentage":40},{"subject":"lifeSciences","percentage":40},{"subject":"geography","percentage":40},{"subject":"isiZulu","percentage":40},{"subject":"lifeOrientation","percentage":70}]}
+{"fromKwaDlangezwa":true,"nationalId":"$1","subjectResults":[{"subject":"englishHomeLanguage","percentage":50},{"subject":"mathematics","percentage":40},{"subject":"physicalSciences","percentage":40},{"subject":"lifeSciences","percentage":40},{"subject":"geography","percentage":40},{"subject":"isiZulu","percentage":40},{"subject":"lifeOrientation","percentage":70}]}
 JSON
 }
 

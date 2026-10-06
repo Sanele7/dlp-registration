@@ -1,5 +1,10 @@
 # Validation rules — registration eligibility
 
+## 0. Residence (asked first)
+- The applicant must answer "Are you from KwaDlangezwa?" (`fromKwaDlangezwa`, true/false). It is required.
+- *No* → rejected immediately with reason `NOT_RESIDENT` (HTTP 422): the programme is only open to residents of KwaDlangezwa.
+- *Yes* → the remaining rules apply. The applicant must later bring proof of residence to the branch helpdesk; the service does not verify it online.
+
 ## 1. National ID number
 - Must be exactly 13 digits, numeric only.
 - First 6 digits must form a valid calendar date (YYMMDD).
