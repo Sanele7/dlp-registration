@@ -29,6 +29,8 @@ LOG.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 TABLE_NAME = os.getenv("REGISTRATIONS_TABLE", "dlp-registrations")
 CAPACITY_KEY = "CAPACITY#programme"
 PROGRAMME_CAPACITY = int(os.getenv("PROGRAMME_CAPACITY", "10"))
+MIN_AGE = int(os.getenv("MIN_AGE", "18"))
+MAX_AGE = int(os.getenv("MAX_AGE", "25"))
 
 DYNAMODB_ENDPOINT = os.getenv("DYNAMODB_ENDPOINT")
 _dynamodb = boto3.resource("dynamodb", endpoint_url=DYNAMODB_ENDPOINT) if DYNAMODB_ENDPOINT else boto3.resource("dynamodb")
@@ -68,6 +70,16 @@ def handler(event, context):
         return _failure(
             422, correlation_id, timestamp, "INVALID_NATIONAL_ID",
             detail=_id_problem(national_id),
+        )
+
+    age = id_result["age"]
+    if age < MIN_AGE or age > MAX_AGE:
+        return _failure(
+            422, correlation_id, timestamp, "AGE_NOT_ELIGIBLE",
+            detail=(
+                f"Applicants must be between {MIN_AGE} and {MAX_AGE} years old "
+                f"(age is worked out from the national ID). Your age is {age}."
+            ),
         )
 
     aps_result = calculate_aps(subjects)

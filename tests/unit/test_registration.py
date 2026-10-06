@@ -112,3 +112,21 @@ def test_aps_too_high_detail_states_the_score():
     body = json.loads(response["body"])
     assert body["reason"] == "APS_TOO_HIGH"
     assert "42" in body["detail"]
+
+
+def test_applicant_over_age_limit_is_rejected_with_age_reason():
+    payload = valid_payload()
+    payload["nationalId"] = "9911211111082"
+    response = registration.handler(event(payload), None)
+    body = json.loads(response["body"])
+    assert response["statusCode"] == 422
+    assert body["reason"] == "AGE_NOT_ELIGIBLE"
+    assert "between 18 and 25" in body["detail"]
+    assert "9911211111082" not in response["body"]
+
+
+def test_applicant_under_age_limit_is_rejected_with_age_reason():
+    payload = valid_payload()
+    payload["nationalId"] = "1206105001087"
+    body = json.loads(registration.handler(event(payload), None)["body"])
+    assert body["reason"] == "AGE_NOT_ELIGIBLE"

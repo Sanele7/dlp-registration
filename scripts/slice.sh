@@ -24,7 +24,10 @@ STAGE="${API_GATEWAY_STAGE:-local}"
 gen_id() { # random synthetic 13-digit ID with a valid Luhn check digit
   python3 - <<'PY'
 import random
-body = "%02d%02d%02d%04d08" % (random.randint(0, 6), random.randint(1, 12),
+import datetime
+today = datetime.date.today()
+year = today.year - random.randint(20, 24)          # always within the eligible age range
+body = "%02d%02d%02d%04d08" % (year % 100, random.randint(1, 12),
                               random.randint(1, 28), random.randint(0, 9999))
 for check in range(10):
     digits = [int(c) for c in body + str(check)]

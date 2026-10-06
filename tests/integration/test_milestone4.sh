@@ -130,17 +130,25 @@ post "$(mk 1234567890123 50 40 40 40 40 40 70)"
 expect T5 "invalid: ID fails checksum -> 422" 422 "$STATUS"
 expect T5 "reason INVALID_NATIONAL_ID" INVALID_NATIONAL_ID "$(jget reason)"
 
-post '{"nationalId":"9904276001082","subjectResults":[{"subject":"mathematics","percentage":50}]}'
+post '{"nationalId":"0404276001082","subjectResults":[{"subject":"mathematics","percentage":50}]}'
 expect T6 "invalid: missing subjects -> 422" 422 "$STATUS"
 expect T6 "reason INVALID_PAYLOAD" INVALID_PAYLOAD "$(jget reason)"
 
-post "$(mk 9904276001082 85 85 85 85 85 85 85)"
+post "$(mk 0404276001082 85 85 85 85 85 85 85)"
 expect T7 "invalid: APS above ceiling -> 422" 422 "$STATUS"
 expect T7 "reason APS_TOO_HIGH" APS_TOO_HIGH "$(jget reason)"
 
-post '{"nationalId":"9904276001082","subjectResults":[{"subject":"englishHomeLanguage","percentage":50},{"subject":"mathematics","percentage":40},{"subject":"physicalSciences","percentage":40},{"subject":"lifeSciences","percentage":40},{"subject":"geography","percentage":40},{"subject":"isiZulu","percentage":"abc"},{"subject":"lifeOrientation","percentage":70}]}'
+post '{"nationalId":"0404276001082","subjectResults":[{"subject":"englishHomeLanguage","percentage":50},{"subject":"mathematics","percentage":40},{"subject":"physicalSciences","percentage":40},{"subject":"lifeSciences","percentage":40},{"subject":"geography","percentage":40},{"subject":"isiZulu","percentage":"abc"},{"subject":"lifeOrientation","percentage":70}]}'
 expect T8 "invalid: wrong type for a percentage -> 422" 422 "$STATUS"
 expect T8 "reason INVALID_PAYLOAD" INVALID_PAYLOAD "$(jget reason)"
+
+post "$(mk 9911211111082 50 40 40 40 40 40 70)"
+expect T8b "invalid: applicant older than the age limit -> 422" 422 "$STATUS"
+expect T8b "reason AGE_NOT_ELIGIBLE" AGE_NOT_ELIGIBLE "$(jget reason)"
+
+post "$(mk 1206105001087 50 40 40 40 40 40 70)"
+expect T8c "invalid: applicant younger than the age limit -> 422" 422 "$STATUS"
+expect T8c "reason AGE_NOT_ELIGIBLE" AGE_NOT_ELIGIBLE "$(jget reason)"
 
 expect T5-8 "no item written by any rejected request" "$BEFORE_ITEMS" "$(item_count)"
 expect T5-8 "no seat consumed by any rejected request" "$BEFORE_SEATS" "$(seats_left)"
@@ -188,7 +196,7 @@ expect T11 "live IAM policy: no wildcard actions/resources, no scan/query/delete
 
 LOGS="$(aws_local logs filter-log-events --log-group-name "/aws/lambda/$FUNCTION" --query 'events[].message' --output text 2>/dev/null || true)"
 LEAKS=0
-for id in 0303155029083 0601205012086 0508125123085 0310015150082 9904276001082 1234567890123; do
+for id in 0303155029083 0601205012086 0508125123085 0310015150082 0404276001082 1234567890123 9911211111082 1206105001087; do
   if printf '%s' "$LOGS" | grep -q "$id"; then LEAKS=$((LEAKS+1)); fi
 done
 expect T12 "full national IDs never appear in Lambda logs" 0 "$LEAKS"

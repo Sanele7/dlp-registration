@@ -13,7 +13,13 @@
 | 900101501308 | Invalid | Only 12 digits |
 | 9013015013088 | Invalid | Month "13" is not a valid calendar month |
 
-## 2. APS (Admission Point Score)
+## 2. Age eligibility
+- Age is derived from the first 6 digits of the national ID (never self-declared).
+- Applicants must be between **18 and 25 years old, inclusive** (configurable with `MIN_AGE` / `MAX_AGE`).
+- Outside that range the request is rejected with reason `AGE_NOT_ELIGIBLE` (HTTP 422), before APS is calculated.
+- Checked after the ID is validated, so an invalid ID is still reported as `INVALID_NATIONAL_ID`.
+
+## 3. APS (Admission Point Score)
 - Applicants take 7 subjects.
 - APS is calculated from the **best 6 subjects, excluding Life Orientation**.
 - Maximum allowed APS for this programme: **20**.
