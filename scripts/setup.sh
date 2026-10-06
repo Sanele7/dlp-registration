@@ -9,6 +9,7 @@
 # ============================================================
 
 set -euo pipefail
+export AWS_PAGER=""
 
 # Fail early, with install hints, if a required tool is missing
 "$(dirname "$0")/preflight.sh" || exit 1

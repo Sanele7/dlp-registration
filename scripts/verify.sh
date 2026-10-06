@@ -7,6 +7,7 @@
 # ============================================================
 
 set -uo pipefail
+export AWS_PAGER=""
 
 if [ -f .env ]; then set -a; source .env; set +a; fi
 

@@ -11,6 +11,7 @@
 # specific ID: NATIONAL_ID=<13 digits> ./scripts/slice.sh
 # ============================================================
 set -uo pipefail
+export AWS_PAGER=""
 cd "$(dirname "$0")/.."
 
 if [ -f .env ]; then set -a; source .env; set +a; fi
