@@ -14,11 +14,15 @@ echo "==> Stopping containers and removing volumes"
 docker compose down -v
 
 echo "==> Removing local runtime state"
-# LocalStack writes ./volume as root inside the container, so a plain rm
-# can fail with "Permission denied" for the invoking user. Try rm first,
-# then fall back to deleting through a throwaway container.
-if ! rm -rf ./volume 2>/dev/null; then
-  docker run --rm -v "$PWD/volume:/v" alpine sh -c 'rm -rf /v/* /v/.[!.]* 2>/dev/null; true' >/dev/null 2>&1 || true
+# LocalStack creates ./volume as root inside the container, so a plain rm can
+# fail with "Permission denied". Try rm first; if anything is left, delete it
+# through a throwaway container using the LocalStack image that is already
+# on this machine (no download needed).
+rm -rf ./volume 2>/dev/null || true
+if [ -d ./volume ]; then
+  IMAGE="localstack/localstack:${LOCALSTACK_VERSION:-4.14.0}"
+  docker run --rm --entrypoint sh -v "$PWD/volume:/v" "$IMAGE" \
+    -c 'rm -rf /v/* /v/.[!.]* 2>/dev/null; true' || true
   rm -rf ./volume 2>/dev/null || true
 fi
 
