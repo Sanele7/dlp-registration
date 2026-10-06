@@ -52,12 +52,22 @@ PY
 echo; echo "Sending registration..."
 RESP="$(curl -s -w '\n%{http_code}' -X POST "$URL" -H 'Content-Type: application/json' -d "$BODY")"
 CODE="$(echo "$RESP" | tail -n1)"; JSON="$(echo "$RESP" | sed '$d')"
+DETAIL="$(echo "$JSON" | python3 -c 'import json,sys
+try: print(json.loads(sys.stdin.read()).get("detail",""))
+except Exception: print("")')"
+REASON="$(echo "$JSON" | python3 -c 'import json,sys
+try: print(json.loads(sys.stdin.read()).get("reason",""))
+except Exception: print("")')"
 echo; echo "HTTP $CODE"; echo "$JSON" | python3 -m json.tool 2>/dev/null || echo "$JSON"
 echo
-case "$CODE" in
-  201) echo "RESULT: registered – seat reserved." ;;
-  409) echo "RESULT: not registered – already registered or programme full." ;;
-  422) echo "RESULT: not registered – invalid input or APS above 20." ;;
-  503) echo "RESULT: not registered – storage unavailable, try again." ;;
-  *)   echo "RESULT: unexpected response." ;;
-esac
+if [ "$CODE" = "201" ]; then
+  echo "RESULT: REGISTERED - a seat has been reserved."
+else
+  echo "RESULT: NOT REGISTERED ($REASON)"
+  [ -n "$DETAIL" ] && echo "WHY:    $DETAIL"
+  case "$CODE" in
+    422) echo "NEXT:   correct the input and submit again." ;;
+    409) echo "NEXT:   no action possible for this ID." ;;
+    503) echo "NEXT:   wait a moment and try again." ;;
+  esac
+fi

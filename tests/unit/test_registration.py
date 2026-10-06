@@ -92,3 +92,23 @@ def test_full_session_returns_409():
 
     assert response["statusCode"] == 409
     assert json.loads(response["body"])["reason"] == "SESSION_FULL"
+
+
+def test_rejection_includes_plain_language_detail():
+    payload = valid_payload()
+    payload["nationalId"] = "9911211111088"
+    response = registration.handler(event(payload), None)
+    body = json.loads(response["body"])
+    assert body["reason"] == "INVALID_NATIONAL_ID"
+    assert "checksum" in body["detail"]
+    assert "9911211111088" not in response["body"]
+
+
+def test_aps_too_high_detail_states_the_score():
+    payload = valid_payload()
+    for s in payload["subjectResults"]:
+        s["percentage"] = 90
+    response = registration.handler(event(payload), None)
+    body = json.loads(response["body"])
+    assert body["reason"] == "APS_TOO_HIGH"
+    assert "42" in body["detail"]

@@ -17,7 +17,11 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from validation.aps import calculate_aps
-from validation.national_id import validate_and_derive_age
+from validation.national_id import (
+    _extract_birth_date,
+    _passes_luhn_checksum,
+    validate_and_derive_age,
+)
 
 LOG = logging.getLogger()
 LOG.setLevel(os.getenv("LOG_LEVEL", "INFO"))
@@ -38,7 +42,10 @@ def handler(event, context):
     try:
         payload = _parse_payload(event)
     except ValueError:
-        return _failure(422, correlation_id, timestamp, "INVALID_PAYLOAD")
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_PAYLOAD",
+            detail="The request is not valid JSON.",
+        )
 
     national_id = payload.get("nationalId")
     subject_results = payload.get("subjectResults")
@@ -47,7 +54,10 @@ def handler(event, context):
         return _failure(422, correlation_id, timestamp, "INVALID_PAYLOAD")
 
     if len(subject_results) != 7:
-        return _failure(422, correlation_id, timestamp, "INVALID_PAYLOAD")
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_PAYLOAD",
+            detail="Exactly 7 subjects are required (6 counted subjects plus Life Orientation).",
+        )
 
     subjects = _subject_array_to_dict(subject_results)
     if subjects is None:
@@ -55,16 +65,25 @@ def handler(event, context):
 
     id_result = validate_and_derive_age(national_id)
     if not id_result["valid"]:
-        return _failure(422, correlation_id, timestamp, "INVALID_NATIONAL_ID")
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_NATIONAL_ID",
+            detail=_id_problem(national_id),
+        )
 
     aps_result = calculate_aps(subjects)
     if not aps_result["valid"]:
-        reason = (
-            "APS_TOO_HIGH"
-            if aps_result.get("reason") == "APS_ABOVE_CEILING"
-            else "INVALID_PAYLOAD"
+        if aps_result.get("reason") == "APS_ABOVE_CEILING":
+            return _failure(
+                422, correlation_id, timestamp, "APS_TOO_HIGH",
+                detail=(
+                    f"Your APS is {aps_result['aps_total']}, but the programme "
+                    "accepts a maximum of 20 (best 6 subjects, excluding Life Orientation)."
+                ),
+            )
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_PAYLOAD",
+            detail="Each of the 6 counted subjects needs a percentage between 0 and 100, and subject names must not repeat.",
         )
-        return _failure(422, correlation_id, timestamp, reason)
 
     id_hash = hashlib.sha256(national_id.encode("utf-8")).hexdigest()
     id_hash_prefix = id_hash[:6]
@@ -82,21 +101,25 @@ def handler(event, context):
     except _TransactionRejected:
         if _registration_exists(id_hash):
             return _failure(
-                409, correlation_id, timestamp, "DUPLICATE", id_hash_prefix
+                409, correlation_id, timestamp, "DUPLICATE", id_hash_prefix,
+                detail="This national ID is already registered.",
             )
 
         if _capacity_remaining() <= 0:
             return _failure(
-                409, correlation_id, timestamp, "SESSION_FULL", id_hash_prefix
+                409, correlation_id, timestamp, "SESSION_FULL", id_hash_prefix,
+                detail="All seats in this programme session are taken.",
             )
 
         return _failure(
-            503, correlation_id, timestamp, "STORAGE_UNAVAILABLE", id_hash_prefix
+            503, correlation_id, timestamp, "STORAGE_UNAVAILABLE", id_hash_prefix,
+            detail="The registration store is temporarily unavailable. Please try again shortly.",
         )
     except (BotoCoreError, ClientError, Exception):
         LOG.exception("Registration storage failure")
         return _failure(
-            503, correlation_id, timestamp, "STORAGE_UNAVAILABLE", id_hash_prefix
+            503, correlation_id, timestamp, "STORAGE_UNAVAILABLE", id_hash_prefix,
+            detail="The registration store is temporarily unavailable. Please try again shortly.",
         )
 
     _log_decision(
@@ -222,6 +245,7 @@ def _failure(
     timestamp: str,
     reason: str,
     id_hash_prefix: str | None = None,
+    detail: str | None = None,
 ):
     _log_decision(
         correlation_id,
@@ -231,14 +255,30 @@ def _failure(
         id_hash_prefix,
     )
 
-    return _response(
-        status_code,
-        {
-            "correlationId": correlation_id,
-            "status": "REJECTED",
-            "reason": reason,
-        },
-    )
+    body = {
+        "correlationId": correlation_id,
+        "status": "REJECTED",
+        "reason": reason,
+    }
+    if detail:
+        body["detail"] = detail
+    return _response(status_code, body)
+
+
+def _id_problem(national_id: str) -> str:
+    """Plain-language explanation of why a national ID was rejected.
+
+    Never echoes the ID itself.
+    """
+    if not national_id.isdigit():
+        return "The national ID must contain digits only."
+    if len(national_id) != 13:
+        return f"The national ID must be exactly 13 digits (you entered {len(national_id)})."
+    if _extract_birth_date(national_id) is None:
+        return "The first 6 digits are not a valid birth date (YYMMDD)."
+    if not _passes_luhn_checksum(national_id):
+        return "The ID number is not valid: its last digit (checksum) does not match the other digits. Please check for a typing mistake."
+    return "The national ID is not valid."
 
 
 def _log_decision(
