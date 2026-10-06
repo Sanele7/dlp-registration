@@ -10,6 +10,16 @@ acceptance or a reasoned rejection.
 
 ---
 
+## Quick start (one command)
+
+```bash
+git clone https://github.com/Sanele7/dlp-registration.git
+cd dlp-registration
+./scripts/start.sh
+```
+
+`start.sh` checks the tools, picks the right Docker engine, removes a stale LocalStack container, creates `.env` with 5 seats, starts LocalStack, runs `setup.sh` and `verify.sh`. Use `./scripts/start.sh --reset` for a clean slate (no registrations, 5 seats) at any time. Then run `./scripts/register.sh`.
+
 ## Prerequisites
 
 | Requirement | Check with |
