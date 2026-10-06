@@ -202,3 +202,29 @@ def test_status_check_locks_after_too_many_wrong_pins():
         response = registration.handler(_status_event("DLP-ABCD2345", "123456"), None)
     assert response["statusCode"] == 423
     assert json.loads(response["body"])["reason"] == "TOO_MANY_ATTEMPTS"
+
+
+def _check_event(nid):
+    return {"resource": "/registrations/check", "body": json.dumps({"nationalId": nid})}
+
+
+def test_check_clears_a_new_eligible_id():
+    with patch.object(registration, "_registration_exists", return_value=False), \
+         patch.object(registration, "_capacity_remaining", return_value=3):
+        response = registration.handler(_check_event("0303155029083"), None)
+    assert response["statusCode"] == 200
+
+
+def test_check_stops_a_duplicate_before_marks_are_entered():
+    with patch.object(registration, "_registration_exists", return_value=True):
+        response = registration.handler(_check_event("0303155029083"), None)
+    body = json.loads(response["body"])
+    assert response["statusCode"] == 409 and body["reason"] == "DUPLICATE"
+
+
+def test_check_stops_bad_checksum_and_age_and_full_session():
+    assert json.loads(registration.handler(_check_event("9911211111088"), None)["body"])["reason"] == "INVALID_NATIONAL_ID"
+    assert json.loads(registration.handler(_check_event("9911211111082"), None)["body"])["reason"] == "AGE_NOT_ELIGIBLE"
+    with patch.object(registration, "_registration_exists", return_value=False), \
+         patch.object(registration, "_capacity_remaining", return_value=0):
+        assert json.loads(registration.handler(_check_event("0303155029083"), None)["body"])["reason"] == "SESSION_FULL"

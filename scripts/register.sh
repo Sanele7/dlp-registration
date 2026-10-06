@@ -31,6 +31,25 @@ NAMES=("English Home Language" "Mathematics" "Physical Sciences" "Life Sciences"
 
 yesno() { case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in y|yes) echo yes;; n|no) echo no;; *) echo "";; esac; }
 
+# Early screening: stop right after the ID is entered if the applicant can't be registered.
+screen_id() {
+  local resp code js reason detail
+  resp="$(curl -s -w '\n%{http_code}' -X POST "$URL/check" -H 'Content-Type: application/json' \
+          -d "$(python3 -c 'import json,sys; print(json.dumps({"nationalId": sys.argv[1]}))' "$1")")"
+  code="$(echo "$resp" | tail -n1)"; js="$(echo "$resp" | sed '$d')"
+  [ "$code" = "200" ] && return 0
+  reason="$(echo "$js" | python3 -c 'import json,sys
+try: print(json.loads(sys.stdin.read()).get("reason",""))
+except Exception: print("")')"
+  detail="$(echo "$js" | python3 -c 'import json,sys
+try: print(json.loads(sys.stdin.read()).get("detail",""))
+except Exception: print("")')"
+  echo
+  echo "RESULT: NOT REGISTERED (${reason:-ERROR})"
+  [ -n "$detail" ] && echo "WHY:    $detail"
+  exit 1
+}
+
 ID=""; VALUES=()
 if [ "$#" -eq 0 ]; then
   echo "=== Digital Literacy Programme - student registration ==="
@@ -41,12 +60,13 @@ if [ "$#" -eq 0 ]; then
   done
   if [ "$RESIDENT" = "yes" ]; then
     read -r -p "National ID (13 digits): " ID
+    screen_id "$ID"
     for n in "${NAMES[@]}"; do read -r -p "$n (%): " v; VALUES+=("$v"); done
   fi
 elif [ "$#" -eq 1 ] && [ "$(yesno "$1")" = "no" ]; then
   RESIDENT="no"
 elif [ "$#" -eq 9 ] && [ "$(yesno "$1")" = "yes" ]; then
-  RESIDENT="yes"; ID="$2"; shift 2; VALUES=("$@")
+  RESIDENT="yes"; ID="$2"; screen_id "$ID"; shift 2; VALUES=("$@")
 else
   echo "Usage: $0   (interactive)" >&2
   echo "       $0 yes ID p1 p2 p3 p4 p5 p6 p7" >&2

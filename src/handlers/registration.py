@@ -51,6 +51,8 @@ def handler(event, context):
     route = str((event or {}).get("resource") or (event or {}).get("path") or "") if isinstance(event, dict) else ""
     if route.rstrip("/").endswith("/status"):
         return _status_handler(event)
+    if route.rstrip("/").endswith("/check"):
+        return _check_handler(event)
     return _register_handler(event)
 
 
@@ -280,6 +282,67 @@ def _new_pin() -> str:
 
 def _hash_pin(pin: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", pin.encode(), salt.encode(), 50_000).hex()
+
+
+def _check_handler(event):
+    """POST /registrations/check: early screening used right after the national
+    ID is entered, so the applicant is stopped before typing their marks.
+
+    Read-only. The registration itself still re-checks everything atomically.
+    """
+    correlation_id = str(uuid.uuid4())
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    try:
+        payload = _parse_payload(event)
+    except ValueError:
+        payload = {}
+    national_id = payload.get("nationalId") if isinstance(payload, dict) else None
+    if not isinstance(national_id, str):
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_PAYLOAD",
+            detail="Please provide your national ID.",
+        )
+
+    id_result = validate_and_derive_age(national_id)
+    if not id_result["valid"]:
+        return _failure(
+            422, correlation_id, timestamp, "INVALID_NATIONAL_ID",
+            detail=_id_problem(national_id),
+        )
+
+    age = id_result["age"]
+    if age < MIN_AGE or age > MAX_AGE:
+        return _failure(
+            422, correlation_id, timestamp, "AGE_NOT_ELIGIBLE",
+            detail=(
+                f"Applicants must be between {MIN_AGE} and {MAX_AGE} years old "
+                f"(age is worked out from the national ID). Your age is {age}."
+            ),
+        )
+
+    id_hash = hashlib.sha256(national_id.encode("utf-8")).hexdigest()
+    id_hash_prefix = id_hash[:6]
+    try:
+        if _registration_exists(id_hash):
+            return _failure(
+                409, correlation_id, timestamp, "DUPLICATE", id_hash_prefix,
+                detail="This national ID is already registered. Use your reference number and PIN to check your application.",
+            )
+        if _capacity_remaining() <= 0:
+            return _failure(
+                409, correlation_id, timestamp, "SESSION_FULL", id_hash_prefix,
+                detail="All seats in this programme session are taken.",
+            )
+    except (BotoCoreError, ClientError, Exception):
+        LOG.exception("ID check storage failure")
+        return _failure(
+            503, correlation_id, timestamp, "STORAGE_UNAVAILABLE", id_hash_prefix,
+            detail="The registration store is temporarily unavailable. Please try again shortly.",
+        )
+
+    _log_decision(correlation_id, timestamp, "ID_CLEARED", None, id_hash_prefix)
+    return _response(200, {"correlationId": correlation_id, "status": "OK"})
 
 
 def _status_handler(event):

@@ -108,7 +108,7 @@ else
   fi
 fi
 
-echo "==> Configuring API Gateway routes: POST /registrations and POST /registrations/status"
+echo "==> Configuring API Gateway routes: POST /registrations, /registrations/status and /registrations/check"
 API_NAME="${API_GATEWAY_NAME:-dlp-registration-api}"
 STAGE="${API_GATEWAY_STAGE:-local}"
 
@@ -128,21 +128,24 @@ else
   echo "    already exists: $API_ID"
 fi
 
-# Status route (reference + PIN lookup). Idempotent, so existing environments get it too.
+# Extra routes under /registrations (idempotent, so existing environments get them too):
+#   /status  reference + PIN lookup        /check  early ID screening
 REG_RES="$(aws_local apigateway get-resources --rest-api-id "$API_ID" --query "items[?path=='/registrations'].id | [0]" --output text)"
-STATUS_RES="$(aws_local apigateway get-resources --rest-api-id "$API_ID" --query "items[?path=='/registrations/status'].id | [0]" --output text)"
-if [ -z "$STATUS_RES" ] || [ "$STATUS_RES" = "None" ]; then
-  STATUS_RES="$(aws_local apigateway create-resource --rest-api-id "$API_ID" --parent-id "$REG_RES" --path-part status --query id --output text)"
-  aws_local apigateway put-method --rest-api-id "$API_ID" --resource-id "$STATUS_RES" --http-method POST --authorization-type NONE > /dev/null
-  LAMBDA_ARN="$(aws_local lambda get-function --function-name "$FUNCTION" --query 'Configuration.FunctionArn' --output text)"
-  INTEGRATION_URI="arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${LAMBDA_ARN}/invocations"
-  aws_local apigateway put-integration --rest-api-id "$API_ID" --resource-id "$STATUS_RES" --http-method POST --type AWS_PROXY --integration-http-method POST --uri "$INTEGRATION_URI" > /dev/null
-  aws_local lambda add-permission --function-name "$FUNCTION" --statement-id "apigateway-status-${API_ID}" --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn "arn:aws:execute-api:${REGION}:000000000000:${API_ID}/*/POST/registrations/status" > /dev/null 2>&1 || true
-  aws_local apigateway create-deployment --rest-api-id "$API_ID" --stage-name "$STAGE" > /dev/null
-  echo "    status route created"
-else
-  echo "    status route already exists"
-fi
+LAMBDA_ARN="$(aws_local lambda get-function --function-name "$FUNCTION" --query 'Configuration.FunctionArn' --output text)"
+INTEGRATION_URI="arn:aws:apigateway:${REGION}:lambda:path/2015-03-31/functions/${LAMBDA_ARN}/invocations"
+for SUB in status check; do
+  SUB_RES="$(aws_local apigateway get-resources --rest-api-id "$API_ID" --query "items[?path=='/registrations/${SUB}'].id | [0]" --output text)"
+  if [ -z "$SUB_RES" ] || [ "$SUB_RES" = "None" ]; then
+    SUB_RES="$(aws_local apigateway create-resource --rest-api-id "$API_ID" --parent-id "$REG_RES" --path-part "$SUB" --query id --output text)"
+    aws_local apigateway put-method --rest-api-id "$API_ID" --resource-id "$SUB_RES" --http-method POST --authorization-type NONE > /dev/null
+    aws_local apigateway put-integration --rest-api-id "$API_ID" --resource-id "$SUB_RES" --http-method POST --type AWS_PROXY --integration-http-method POST --uri "$INTEGRATION_URI" > /dev/null
+    aws_local lambda add-permission --function-name "$FUNCTION" --statement-id "apigateway-${SUB}-${API_ID}" --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn "arn:aws:execute-api:${REGION}:000000000000:${API_ID}/*/POST/registrations/${SUB}" > /dev/null 2>&1 || true
+    aws_local apigateway create-deployment --rest-api-id "$API_ID" --stage-name "$STAGE" > /dev/null
+    echo "    /${SUB} route created"
+  else
+    echo "    /${SUB} route already exists"
+  fi
+done
 
 echo ""
 echo "Setup complete."

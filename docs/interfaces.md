@@ -25,3 +25,8 @@ Every rejection response may include an optional `detail` field: a plain-languag
 - `POST /registrations/status` with `{"reference", "pin"}` returns 200 with `status`, `aps`, `registeredAt`, `nextSteps`. A wrong PIN and an unknown reference both return 404 `NOT_FOUND` (no enumeration). After 5 wrong PINs the reference is locked: 423 `TOO_MANY_ATTEMPTS`.
 - New reasons: `NOT_RESIDENT`, `AGE_NOT_ELIGIBLE`, `NOT_FOUND`, `TOO_MANY_ATTEMPTS`.
 - Programme capacity is 5 seats (`PROGRAMME_CAPACITY`).
+
+## Early ID screening and admin view (added in Milestone 4)
+
+- `POST /registrations/check` with `{"nationalId"}` is a read-only screen used right after the ID is entered: 200 `OK`, or 422 `INVALID_NATIONAL_ID` / `AGE_NOT_ELIGIBLE`, or 409 `DUPLICATE` / `SESSION_FULL`. The registration still re-checks everything atomically, so this is a convenience, not a security control.
+- Admin view: `./scripts/admin.sh` reads the table with the operator's own credentials. The Lambda role keeps its least-privilege policy (no Scan). There is no public admin endpoint.

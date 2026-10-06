@@ -96,6 +96,14 @@ To check an application later, with the reference and PIN:
 ./scripts/check-status.sh
 ```
 
+`register.sh` stops right after the national ID is entered if the ID is invalid, over/under age, **already registered** (`NOT REGISTERED (DUPLICATE)`) or the programme is full, so the student never has to type their marks.
+
+Admin view of the seats and the accepted applicants (reference, APS, time; no national IDs or PINs):
+
+```bash
+./scripts/admin.sh
+```
+
 The programme has **5 seats** by default (`PROGRAMME_CAPACITY` in `.env`; the demo uses 5).
 
 ## Troubleshooting

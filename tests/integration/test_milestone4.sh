@@ -9,6 +9,7 @@
 #   T10     Recovery (same request succeeds once the store is back)
 #   T15     Application status check (reference + PIN, lockout)
 #   T16     Programme capacity (session full)
+#   T17     Early ID screening (duplicate/invalid/over-age stopped right after the ID)
 #   T11-T13 Security / control checks (least-privilege IAM, no ID in logs,
 #           secret scan)
 #   T14     Teardown / rebuild (destroy everything, recreate the slice)
@@ -183,6 +184,26 @@ expect T8d "message explains the residence rule" yes "$(jget detail | grep -q 'r
 
 expect T5-8 "no item written by any rejected request" "$BEFORE_ITEMS" "$(item_count)"
 expect T5-8 "no seat consumed by any rejected request" "$BEFORE_SEATS" "$(seats_left)"
+echo
+
+# ---- Early ID screening (stops before marks are entered) ---
+echo "--- Early ID screening ---"
+post_check() { # json ; sets STATUS and BODY
+  local r
+  r="$(curl -sS -w '\n%{http_code}' -X POST "$BASE/check" -H 'Content-Type: application/json' -d "$1")"
+  STATUS="$(printf '%s\n' "$r" | tail -n1)"
+  BODY="$(printf '%s\n' "$r" | sed '$d')"
+}
+post_check '{"nationalId":"0303155029083"}'
+expect T17 "already-registered ID is stopped at the ID step -> 409" 409 "$STATUS"
+expect T17 "reason DUPLICATE" DUPLICATE "$(jget reason)"
+post_check "{\"nationalId\":\"$(gen_id)\"}"
+expect T17 "new eligible ID is cleared to continue -> 200" 200 "$STATUS"
+post_check '{"nationalId":"9911211111082"}'
+expect T17 "over-age ID is stopped at the ID step" AGE_NOT_ELIGIBLE "$(jget reason)"
+post_check '{"nationalId":"1234567890123"}'
+expect T17 "bad-checksum ID is stopped at the ID step" INVALID_NATIONAL_ID "$(jget reason)"
+expect T17 "screening wrote nothing" 7 "$(item_count)"
 echo
 
 # ---- Application status check ------------------------------
