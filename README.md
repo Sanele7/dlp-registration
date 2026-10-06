@@ -80,6 +80,14 @@ serious professional error, not a minor deduction.
 
 ---
 
+### Register a student from the command line
+
+```bash
+./scripts/register.sh
+```
+
+It asks for the 13-digit national ID and the seven subject percentages (English, Mathematics, Physical Sciences, Life Sciences, Geography, isiZulu, Life Orientation), then prints the result. Non-interactive form: `./scripts/register.sh 0303155029083 60 50 50 50 50 50 70`.
+
 ## Troubleshooting
 
 **`bash: api-id: No such file or directory` (or similar with `<...>`)**
