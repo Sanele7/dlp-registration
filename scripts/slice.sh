@@ -6,9 +6,9 @@
 # that nothing new was stored.
 #
 # Usage: ./scripts/slice.sh
-# Optional: NATIONAL_ID=<synthetic 13-digit id> ./scripts/slice.sh
-# (A second run with the same ID returns 409 DUPLICATE; reset with
-#  ./scripts/teardown.sh && docker compose up -d && ./scripts/setup.sh)
+# Each run uses a NEW random synthetic national ID (valid checksum), so it
+# can be repeated and never clashes with the integration tests. To force a
+# specific ID: NATIONAL_ID=<13 digits> ./scripts/slice.sh
 # ============================================================
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -20,7 +20,20 @@ TABLE="${REGISTRATIONS_TABLE:-dlp-registrations}"
 FUNCTION="${LAMBDA_FUNCTION_NAME:-dlp-registration-processor}"
 API_NAME="${API_GATEWAY_NAME:-dlp-registration-api}"
 STAGE="${API_GATEWAY_STAGE:-local}"
-NATIONAL_ID="${NATIONAL_ID:-0303155029083}"
+gen_id() { # random synthetic 13-digit ID with a valid Luhn check digit
+  python3 - <<'PY'
+import random
+body = "%02d%02d%02d%04d08" % (random.randint(0, 6), random.randint(1, 12),
+                              random.randint(1, 28), random.randint(0, 9999))
+for check in range(10):
+    digits = [int(c) for c in body + str(check)]
+    total = sum(d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2)
+                for i, d in enumerate(reversed(digits)))
+    if total % 10 == 0:
+        print(body + str(check)); break
+PY
+}
+NATIONAL_ID="${NATIONAL_ID:-$(gen_id)}"
 
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
@@ -53,8 +66,8 @@ BODY="$(printf '%s' "$RESP" | tail -n1)"
 CID="$(printf '%s' "$BODY" | field correlationId)"
 REASON="$(printf '%s' "$BODY" | field reason)"
 echo
-if [ "$REASON" = "DUPLICATE" ]; then
-  echo "That national ID is already registered (409 DUPLICATE)."
+if [ "$REASON" = "DUPLICATE" ] || [ "$REASON" = "SESSION_FULL" ]; then
+  echo "Registration refused ($REASON): that ID is registered already or the programme is full."
   echo "For a clean run: ./scripts/teardown.sh && docker compose up -d && ./scripts/setup.sh"
   exit 0
 fi
