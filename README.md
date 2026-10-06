@@ -17,6 +17,9 @@ acceptance or a reasoned rejection.
 | Docker Engine + Compose plugin | `docker --version` and `docker compose version` |
 | AWS CLI v2 | `aws --version` |
 | Python 3.11+ | `python3 --version` |
+| `zip` and `curl` | `zip -v` and `curl --version` |
+
+`./scripts/setup.sh` checks all of these first and tells you what is missing.
 
 See `docs/docker-setup.md` if Docker is not installed.
 
@@ -56,7 +59,7 @@ Troubleshooting below.
 src/handlers/       Lambda entry point
 src/validation/     ID, APS and eligibility rules
 infra/              IAM policies
-scripts/            setup, verify, teardown
+scripts/            setup, verify, teardown, slice (run the slice), awslocal (AWS CLI wrapper), preflight
 tests/unit/         rule-level tests
 tests/integration/  end-to-end tests
 docs/decisions/     architecture decision records
@@ -78,6 +81,22 @@ serious professional error, not a minor deduction.
 ---
 
 ## Troubleshooting
+
+**`bash: api-id: No such file or directory` (or similar with `<...>`)**
+A placeholder such as `<api-id>` was pasted literally. Never type angle
+brackets; use `./scripts/slice.sh`, or the `API_ID=$(...)` lookup above.
+
+**`aws: [ERROR]: An error occurred (NoRegion)` or credential errors**
+Your terminal has no AWS settings (only the scripts read `.env`). Use
+`./scripts/awslocal.sh ...` instead of calling `aws` directly, or run
+`set -a; source .env; set +a` first.
+
+**`aws: command not found` or `zip: command not found`**
+Install the missing tool; `./scripts/preflight.sh` lists what is missing.
+
+**`rm: cannot remove './volume/...': Permission denied` during teardown**
+LocalStack creates `./volume` as root. `teardown.sh` now removes it through
+a throwaway container; pull the latest `scripts/teardown.sh`.
 
 **`permission denied ... docker.sock`**
 You are not in the `docker` group, or have not logged out since being added.
@@ -129,16 +148,30 @@ Lambda emits structured CloudWatch-compatible logs containing a correlation ID, 
 
 ### Local API
 
-After `./scripts/setup.sh`, the script prints the API endpoint:
-
-```text
-http://localhost:4566/restapis/<api-id>/local/_user_request_/registrations
-```
-
-Send a registration:
+The easiest way to exercise the whole slice (valid request, log trace,
+stored record, rejected request) is one command, with nothing to copy or
+fill in:
 
 ```bash
-curl -X POST "http://localhost:4566/restapis/<api-id>/local/_user_request_/registrations" \
+./scripts/slice.sh
+```
+
+To run the AWS CLI by hand, use the wrapper. It sets the endpoint, region
+and fake credentials for you, so it works in any new terminal:
+
+```bash
+./scripts/awslocal.sh dynamodb scan --table-name dlp-registrations
+./scripts/awslocal.sh logs describe-log-groups
+```
+
+To send a request yourself, look up the API id automatically (do **not**
+type `<api-id>` literally; the shell treats `<` as redirection):
+
+```bash
+API_ID=$(./scripts/awslocal.sh apigateway get-rest-apis \
+  --query "items[?name=='dlp-registration-api'].id | [0]" --output text)
+
+curl -s -i -X POST "http://localhost:4566/restapis/$API_ID/local/_user_request_/registrations" \
   -H 'Content-Type: application/json' \
   -d '{
     "nationalId": "0303155029083",
@@ -155,6 +188,18 @@ curl -X POST "http://localhost:4566/restapis/<api-id>/local/_user_request_/regis
 ```
 
 Expected normal response: HTTP `201`, `status: CONFIRMED`, an APS value and a `correlationId`.
+
+To trace a correlation ID through the Lambda logs (replace the value with
+the one you received):
+
+```bash
+CID=40286258-f947-403e-b0b3-41dd3b32169a   # example; use your own
+./scripts/awslocal.sh logs filter-log-events \
+  --log-group-name /aws/lambda/dlp-registration-processor --filter-pattern "$CID"
+```
+
+A second registration with the same national ID returns `409`; for a clean
+run use `./scripts/teardown.sh && docker compose up -d && ./scripts/setup.sh`.
 
 ### Milestone 3 integration test
 

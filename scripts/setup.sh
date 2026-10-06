@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+# Fail early, with install hints, if a required tool is missing
+"$(dirname "$0")/preflight.sh" || exit 1
+
 # Load .env if present
 if [ -f .env ]; then
   set -a; source .env; set +a
