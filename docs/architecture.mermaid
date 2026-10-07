@@ -1,34 +1,34 @@
-flowchart TB
-    subgraph untrusted["UNTRUSTED — outside trust boundary"]
-        A["Applicant<br/>submits registration"]
+%%{init: {'theme': 'base', 'themeVariables': {'clusterBkg': '#FFFFFF', 'clusterBorder': '#000000', 'primaryColor': '#F2F2F2', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'edgeLabelBackground': '#EDEDED', 'fontFamily': 'Arial', 'fontSize': '15px'}}}%%
+flowchart LR
+    subgraph untrusted["OUTSIDE TRUST BOUNDARY"]
+        A["Applicant<br/>register.sh / check-status.sh"]
+        OP["Operator<br/>admin.sh<br/>(own local credentials)"]
     end
 
-    subgraph trusted["TRUST BOUNDARY"]
-        B["API Gateway<br/>receives request<br/>invokes Lambda"]
-        C["Lambda — registration processor<br/>STATELESS<br/>─────────────<br/>validate payload<br/>verify ID checksum<br/>derive age<br/>compute APS<br/>check duplicate"]
-        D[("DynamoDB<br/>─────────────<br/>registration records<br/>DURABLE STATE")]
-        G[("DynamoDB<br/>─────────────<br/>capacity counter<br/>single sentinel row")]
-        E["CloudWatch Logs<br/>─────────────<br/>correlation ID<br/>decision + reason<br/>UTC timestamp"]
+    subgraph trusted["TRUST BOUNDARY — LocalStack 4.14.0 in Docker"]
+        B["API Gateway<br/>POST /registrations<br/>POST /registrations/check<br/>POST /registrations/status"]
+        C["Lambda — dlp-registration-processor<br/>STATELESS, python3.11, 128 MB<br/>──────────────<br/>1 residence  2 ID + checksum<br/>3 age 18-25  4 APS ≤ 20<br/>5 atomic write  6 reference + PIN"]
+        D[("DynamoDB — dlp-registrations<br/>──────────────<br/>registration (idHash)<br/>REF# lookup (PIN hash)<br/>CAPACITY# counter (5)")]
+        E["CloudWatch Logs<br/>──────────────<br/>correlation ID<br/>decision + reason<br/>6-char hash prefix"]
     end
 
     subgraph outside["OUTSIDE SYSTEM BOUNDARY — not implemented"]
-        F["Intake verification<br/>documents checked in person<br/>PROVISIONAL → CONFIRMED"]
+        F["Branch helpdesk<br/>checks documents + proof<br/>of residence in person"]
     end
 
-    A -->|"HTTPS POST /registrations<br/>JSON payload"| B
-    B -->|"invoke with event"| C
-    C -->|"conditional UpdateItem<br/>decrement only if remaining > 0<br/>ATOMIC — prevents over-enrolment"| G
-    G -.->|"success or<br/>ConditionalCheckFailed"| C
-    C -->|"PutItem — registration record"| D
-    C -->|"structured log<br/>accept / reject / error"| E
-    C -->|"201 CONFIRMED<br/>422 REJECTED + reason<br/>409 DUPLICATE / FULL<br/>503 SERVICE_UNAVAILABLE"| B
-    B -->|"HTTPS response<br/>+ correlation ID"| A
-    D -.->|"record looked up<br/>by correlation ID"| F
+    A -->|"HTTPS JSON"| B
+    B -->|"invoke"| C
+    C -->|"TransactWriteItems (atomic)<br/>put registration + put REF#<br/>+ decrement seat if remaining > 0"| D
+    C -->|"GetItem (duplicate, seats, status)"| D
+    C -->|"structured log"| E
+    C -->|"201 / 200 / 409 / 422 / 423 / 503<br/>+ correlation ID"| B
+    OP -.->|"Scan (operator only)"| D
+    A -.->|"brings documents"| F
 
-    style A fill:#FAEEDA,stroke:#854F0B,color:#412402
-    style B fill:#E6F1FB,stroke:#185FA5,color:#042C53
-    style C fill:#EEEDFE,stroke:#534AB7,color:#26215C
-    style D fill:#E1F5EE,stroke:#0F6E56,color:#04342C
-    style G fill:#E1F5EE,stroke:#0F6E56,color:#04342C
-    style E fill:#E1F5EE,stroke:#0F6E56,color:#04342C
-    style F fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+    style A fill:#FFFFFF,stroke:#000000,color:#000000
+    style OP fill:#FFFFFF,stroke:#000000,color:#000000
+    style B fill:#F2F2F2,stroke:#000000,color:#000000
+    style C fill:#E6E6E6,stroke:#000000,color:#000000
+    style D fill:#F2F2F2,stroke:#000000,color:#000000
+    style E fill:#F2F2F2,stroke:#000000,color:#000000
+    style F fill:#FAFAFA,stroke:#000000,color:#000000

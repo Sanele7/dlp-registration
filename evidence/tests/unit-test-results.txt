@@ -1,25 +1,39 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3
 cachedir: .pytest_cache
-rootdir: /home/d/4CPS501B/dlp-registration
-collecting ... collected 17 items
+rootdir: dlp-registration
+plugins: anyio-4.13.0
+collecting ... collected 30 items
 
-tests/unit/test_aps.py::test_example_payload_is_above_ceiling PASSED     [  5%]
-tests/unit/test_aps.py::test_high_achiever_is_above_ceiling PASSED       [ 11%]
-tests/unit/test_aps.py::test_low_scorer_is_within_ceiling PASSED         [ 17%]
-tests/unit/test_aps.py::test_life_orientation_is_excluded_from_the_total PASSED [ 23%]
-tests/unit/test_aps.py::test_wrong_subject_count_is_invalid PASSED       [ 29%]
-tests/unit/test_aps.py::test_out_of_range_percentage_is_invalid PASSED   [ 35%]
-tests/unit/test_national_id.py::test_valid_id_passes_checksum_and_derives_age PASSED [ 41%]
-tests/unit/test_national_id.py::test_wrong_length_is_invalid PASSED      [ 47%]
-tests/unit/test_national_id.py::test_non_digit_characters_are_invalid PASSED [ 52%]
-tests/unit/test_national_id.py::test_fails_checksum_is_invalid PASSED    [ 58%]
-tests/unit/test_national_id.py::test_impossible_calendar_date_is_invalid PASSED [ 64%]
-tests/unit/test_registration.py::test_invalid_id_returns_422 PASSED      [ 70%]
-tests/unit/test_registration.py::test_missing_subjects_returns_422 PASSED [ 76%]
-tests/unit/test_registration.py::test_aps_too_high_returns_422_without_storage PASSED [ 82%]
-tests/unit/test_registration.py::test_successful_registration PASSED     [ 88%]
-tests/unit/test_registration.py::test_duplicate_returns_409 PASSED       [ 94%]
-tests/unit/test_registration.py::test_full_session_returns_409 PASSED    [100%]
+tests/unit/test_aps.py::test_example_payload_is_above_ceiling PASSED     [  3%]
+tests/unit/test_aps.py::test_high_achiever_is_above_ceiling PASSED       [  6%]
+tests/unit/test_aps.py::test_low_scorer_is_within_ceiling PASSED         [ 10%]
+tests/unit/test_aps.py::test_life_orientation_is_excluded_from_the_total PASSED [ 13%]
+tests/unit/test_aps.py::test_wrong_subject_count_is_invalid PASSED       [ 16%]
+tests/unit/test_aps.py::test_out_of_range_percentage_is_invalid PASSED   [ 20%]
+tests/unit/test_national_id.py::test_valid_id_passes_checksum_and_derives_age PASSED [ 23%]
+tests/unit/test_national_id.py::test_wrong_length_is_invalid PASSED      [ 26%]
+tests/unit/test_national_id.py::test_non_digit_characters_are_invalid PASSED [ 30%]
+tests/unit/test_national_id.py::test_fails_checksum_is_invalid PASSED    [ 33%]
+tests/unit/test_national_id.py::test_impossible_calendar_date_is_invalid PASSED [ 36%]
+tests/unit/test_registration.py::test_invalid_id_returns_422 PASSED      [ 40%]
+tests/unit/test_registration.py::test_missing_subjects_returns_422 PASSED [ 43%]
+tests/unit/test_registration.py::test_aps_too_high_returns_422_without_storage PASSED [ 46%]
+tests/unit/test_registration.py::test_successful_registration PASSED     [ 50%]
+tests/unit/test_registration.py::test_duplicate_returns_409 PASSED       [ 53%]
+tests/unit/test_registration.py::test_full_session_returns_409 PASSED    [ 56%]
+tests/unit/test_registration.py::test_rejection_includes_plain_language_detail PASSED [ 60%]
+tests/unit/test_registration.py::test_aps_too_high_detail_states_the_score PASSED [ 63%]
+tests/unit/test_registration.py::test_applicant_over_age_limit_is_rejected_with_age_reason PASSED [ 66%]
+tests/unit/test_registration.py::test_applicant_under_age_limit_is_rejected_with_age_reason PASSED [ 70%]
+tests/unit/test_registration.py::test_non_resident_is_rejected_before_anything_else PASSED [ 73%]
+tests/unit/test_registration.py::test_missing_residence_answer_is_rejected PASSED [ 76%]
+tests/unit/test_registration.py::test_status_check_with_correct_reference_and_pin PASSED [ 80%]
+tests/unit/test_registration.py::test_status_check_wrong_pin_is_not_found_and_counted PASSED [ 83%]
+tests/unit/test_registration.py::test_status_check_unknown_reference_looks_the_same_as_wrong_pin PASSED [ 86%]
+tests/unit/test_registration.py::test_status_check_locks_after_too_many_wrong_pins PASSED [ 90%]
+tests/unit/test_registration.py::test_check_clears_a_new_eligible_id PASSED [ 93%]
+tests/unit/test_registration.py::test_check_stops_a_duplicate_before_marks_are_entered PASSED [ 96%]
+tests/unit/test_registration.py::test_check_stops_bad_checksum_and_age_and_full_session PASSED [100%]
 
-============================== 17 passed in 0.70s ==============================
+============================== 30 passed in 0.95s ==============================

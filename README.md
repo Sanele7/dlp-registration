@@ -66,15 +66,97 @@ Troubleshooting below.
 ## Repository layout
 
 ```
-src/handlers/       Lambda entry point
-src/validation/     ID, APS and eligibility rules
+src/handlers/       Lambda entry point (register, check and status routes)
+src/validation/     National ID and APS rules
 infra/              IAM policies
-scripts/            setup, verify, teardown, slice (run the slice), awslocal (AWS CLI wrapper), preflight
-tests/unit/         rule-level tests
-tests/integration/  end-to-end tests
-docs/decisions/     architecture decision records
-evidence/           screenshots, logs, test output
+scripts/            start, setup, verify, teardown, register, check-status, admin, slice, awslocal, preflight
+tests/unit/         rule and handler tests (30)
+tests/integration/  end-to-end tests (Milestone 3 and the Milestone 4 final set)
+docs/               architecture and event-flow diagrams, data model, interfaces, validation rules,
+                    decision log, ADRs, cost worksheet, threat checklist, contribution record
+evidence/           indexed evidence pack: tests, platform checks, screenshots, peer review
 ```
+
+---
+
+## Architecture summary
+
+`Applicant (scripts) -> API Gateway -> Lambda -> DynamoDB`, with structured logs for every attempt.
+One stateless Lambda serves three POST routes: `/registrations` (register), `/registrations/check`
+(read-only early screening) and `/registrations/status` (reference + PIN lookup). Rules run in a fixed
+order before any write: residence, national ID and checksum, age 18-25, APS at most 20. The registration
+item, a reference lookup item and the seat decrement are written in **one DynamoDB transaction**, so a
+duplicate cannot use a seat and the programme cannot be over-enrolled. See `docs/architecture.png`,
+`docs/event-flow.png`, `docs/data-model.md`, `docs/interfaces.md` and `docs/decision-log.md`.
+
+| Local component | AWS equivalent |
+|---|---|
+| LocalStack REST API | Amazon API Gateway |
+| Lambda, python3.11, 128 MB | AWS Lambda |
+| DynamoDB table `dlp-registrations` | Amazon DynamoDB |
+| Lambda log group | Amazon CloudWatch Logs |
+| IAM role `dlp-lambda-role` | AWS IAM (policy inspected, not enforced by LocalStack) |
+
+## Configuration variables
+
+Copy `.env.example` to `.env` (`start.sh` does this). `.env` is gitignored. Values are placeholders or fake local values only.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LOCALSTACK_VERSION` | `4.14.0` | Pinned LocalStack image (see ADR 001) |
+| `LOCALSTACK_ENDPOINT` | `http://localhost:4566` | Where the AWS CLI and scripts connect |
+| `LOCALSTACK_DEBUG` | `0` | LocalStack debug logging |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `test`, `test` | Fake credentials required by the SDK. Never use real keys |
+| `AWS_DEFAULT_REGION` | `us-east-1` | Region used by the CLI and the table ARN |
+| `REGISTRATIONS_TABLE` | `dlp-registrations` | DynamoDB table name |
+| `COUNTER_TABLE` | `dlp-capacity` | Reserved; the seat counter lives in the registrations table |
+| `LAMBDA_FUNCTION_NAME` | `dlp-registration-processor` | Lambda name |
+| `PROGRAMME_CAPACITY` | `5` | Seats available (read by `setup.sh` and the Lambda) |
+| `LOG_LEVEL` | `INFO` | Lambda log level |
+| `API_GATEWAY_NAME`, `API_GATEWAY_STAGE` | `dlp-registration-api`, `local` | API name and stage |
+| `MIN_AGE`, `MAX_AGE` | `18`, `25` | Lambda environment variables (code defaults; not in `.env.example`) |
+
+## Version pins
+
+| What | Pin | Where |
+|---|---|---|
+| LocalStack image | `4.14.0` | `docker-compose.yml`, `.env.example` |
+| Lambda runtime | `python3.11` | `scripts/setup.sh` |
+| Test tools (local only) | `pytest>=8`, `boto3>=1.34` | `requirements-dev.txt` |
+
+## Testing
+
+| Layer | Command | Expected |
+|---|---|---|
+| Unit (30 tests, no Docker needed) | `pip install -r requirements-dev.txt` then `AWS_DEFAULT_REGION=us-east-1 AWS_ACCESS_KEY_ID=x AWS_SECRET_ACCESS_KEY=x python3 -m pytest tests/unit -q` | `30 passed` |
+| Environment check | `./scripts/verify.sh` | `7 passed, 0 failed` |
+| Milestone 3 integration | `bash tests/integration/test_milestone3.sh` | `All Milestone 3 integration checks passed.` |
+| Milestone 4 final test set | `./scripts/start.sh --reset` then `bash tests/integration/test_milestone4.sh 2>&1 \| tee evidence/tests/m4-final-test-run.txt` | `=== Result: N passed, 0 failed ===` |
+
+The Milestone 4 set needs a fresh environment, covers normal, invalid, dependency-failure, recovery,
+security/control and teardown/rebuild cases (T1-T17), and ends by tearing the environment down and
+rebuilding it. `SKIP_TEARDOWN=1` skips the last step. The Milestone 3 test leaves one registration behind,
+so reset (`./scripts/start.sh --reset`) before running the Milestone 4 set. The evidence is indexed in `evidence/INDEX.md`.
+
+## Teardown
+
+```bash
+./scripts/teardown.sh
+```
+
+Stops and removes the container and network, deletes `./volume` (falling back to a throwaway container if
+files are root-owned), and verifies that no `dlp-` container and no local state remain. Rebuild with
+`./scripts/start.sh`.
+
+## Release
+
+The version used for the demonstration is the git tag recorded here: **[INSERT TAG, e.g. v1.0.0, and commit hash]**.
+Check it out with `git checkout <tag>`.
+
+## AI assistance
+
+AI assistance (Claude, by Anthropic) was used for scripts, tests and documentation drafts. See
+`docs/contribution-record.md` for the full statement.
 
 ---
 

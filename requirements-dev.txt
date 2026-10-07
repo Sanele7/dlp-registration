@@ -1,0 +1,4 @@
+# Only needed to run the unit tests on your own machine (not for the Lambda,
+# which gets boto3 from the Python 3.11 runtime). Tested with pytest 9.1.1.
+pytest>=8
+boto3>=1.34

@@ -1,0 +1,40 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#F2F2F2', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'actorBkg': '#F2F2F2', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'noteBkgColor': '#EDEDED', 'noteBorderColor': '#000000', 'noteTextColor': '#000000', 'activationBkgColor': '#E6E6E6', 'activationBorderColor': '#000000', 'labelBoxBkgColor': '#EDEDED', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000', 'loopTextColor': '#000000', 'fontFamily': 'Arial', 'fontSize': '15px'}}}%%
+sequenceDiagram
+    autonumber
+    participant A as Applicant
+    participant G as API Gateway
+    participant L as Lambda
+    participant D as DynamoDB
+    participant C as CloudWatch Logs
+
+    Note over A,C: Early screening, right after the ID is typed
+    A->>G: POST /registrations/check {nationalId}
+    G->>L: invoke
+    L->>D: GetItem (already registered?) + GetItem (seats left?)
+    L-->>A: 200 OK, or 409 DUPLICATE / SESSION_FULL, or 422 ID / AGE
+
+    Note over A,C: Registration (validation first, one atomic write)
+    A->>G: POST /registrations {fromKwaDlangezwa, nationalId, subjectResults}
+    G->>L: invoke
+    L->>L: residence, ID + checksum, age 18-25, APS <= 20
+    alt any rule fails
+        L->>C: log REJECTED + reason + correlationId
+        L-->>A: 422 + reason + detail (nothing written)
+    else all rules pass
+        L->>D: TransactWriteItems: put registration, put reference item, seats minus 1 if seats above 0
+        alt transaction succeeds
+            L->>C: log CONFIRMED + correlationId + 6-char hash prefix
+            L-->>A: 201 + reference + one-time PIN + next steps
+        else cancelled by a condition
+            L->>D: GetItem to classify the cause
+            L-->>A: 409 DUPLICATE or SESSION_FULL (nothing written)
+        else store unavailable
+            L-->>A: 503 STORAGE_UNAVAILABLE (nothing written, retry later)
+        end
+    end
+
+    Note over A,C: Status check
+    A->>G: POST /registrations/status {reference, pin}
+    G->>L: invoke
+    L->>D: GetItem reference item, compare salted PIN hash
+    L-->>A: 200 status, or 404 NOT_FOUND (wrong PIN = unknown reference), or 423 after 5 wrong PINs
