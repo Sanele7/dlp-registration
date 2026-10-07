@@ -1,0 +1,147 @@
+=== Milestone 4 final test set ===
+API: http://localhost:4566/restapis/qed5osju0c/local/_user_request_/registrations
+Fresh start: items=1, seats=5
+
+--- Normal cases ---
+PASS T1 normal: typical applicant returns 201 (got: 201)
+PASS T1 normal: APS 19 (got: 19)
+     correlationId: b48a6350-175a-4a9d-9a76-834a8ac4f7b6
+PASS T1 response carries a reference number (DLP-XXXXXXXX) (got: yes)
+PASS T1 response carries a 6-digit PIN (got: yes)
+PASS T1 response tells the student to bring documents (incl. proof of residence) (got: yes)
+PASS T2 normal: low-scoring applicant returns 201 (got: 201)
+PASS T2 normal: APS 13 (got: 13)
+PASS T3 normal: boundary APS (=20, the ceiling) returns 201 (got: 201)
+PASS T3 normal: APS 20 (got: 20)
+PASS T3 3 registrations stored (each + its reference lookup item) + capacity item (got: 7)
+PASS T3 seats left decremented by exactly 3 (got: 2)
+
+--- Repeated user journey ---
+PASS T4 same applicant again returns 409 (got: 409)
+PASS T4 reason DUPLICATE (got: DUPLICATE)
+PASS T4 duplicate message points the student to the reference/PIN check (got: yes)
+PASS T4 duplicate consumed no seat (got: 2)
+
+--- Invalid-input cases (state must not change) ---
+PASS T5 invalid: ID fails checksum -> 422 (got: 422)
+PASS T5 reason INVALID_NATIONAL_ID (got: INVALID_NATIONAL_ID)
+PASS T6 invalid: missing subjects -> 422 (got: 422)
+PASS T6 reason INVALID_PAYLOAD (got: INVALID_PAYLOAD)
+PASS T7 invalid: APS above ceiling -> 422 (got: 422)
+PASS T7 reason APS_TOO_HIGH (got: APS_TOO_HIGH)
+PASS T8 invalid: wrong type for a percentage -> 422 (got: 422)
+PASS T8 reason INVALID_PAYLOAD (got: INVALID_PAYLOAD)
+PASS T8b invalid: applicant older than the age limit -> 422 (got: 422)
+PASS T8b reason AGE_NOT_ELIGIBLE (got: AGE_NOT_ELIGIBLE)
+PASS T8c invalid: applicant younger than the age limit -> 422 (got: 422)
+PASS T8c reason AGE_NOT_ELIGIBLE (got: AGE_NOT_ELIGIBLE)
+PASS T8d invalid: applicant not from KwaDlangezwa -> 422 (got: 422)
+PASS T8d reason NOT_RESIDENT (got: NOT_RESIDENT)
+PASS T8d message explains the residence rule (got: yes)
+PASS T5-8 no item written by any rejected request (got: 7)
+PASS T5-8 no seat consumed by any rejected request (got: 2)
+
+--- Early ID screening ---
+PASS T17 already-registered ID is stopped at the ID step -> 409 (got: 409)
+PASS T17 reason DUPLICATE (got: DUPLICATE)
+PASS T17 new eligible ID is cleared to continue -> 200 (got: 200)
+PASS T17 over-age ID is stopped at the ID step (got: AGE_NOT_ELIGIBLE)
+PASS T17 bad-checksum ID is stopped at the ID step (got: INVALID_NATIONAL_ID)
+PASS T17 screening wrote nothing (got: 7)
+
+--- Application status check (reference + PIN) ---
+PASS T15 correct reference + PIN -> 200 (got: 200)
+PASS T15 status CONFIRMED (got: CONFIRMED)
+PASS T15 status shows the APS (got: 19)
+PASS T15 status response does not expose the national ID or its hash (got: no)
+PASS T15 wrong PIN -> 404 NOT_FOUND (got: NOT_FOUND)
+PASS T15 unknown reference answers exactly like a wrong PIN (no enumeration) (got: NOT_FOUND)
+PASS T15 after 5 wrong PINs the reference is locked (even with the right PIN) -> 423 (got: 423)
+
+--- Dependency failure ---
+PASS T9 store unavailable -> 503 (got: 503)
+PASS T9 reason STORAGE_UNAVAILABLE (got: STORAGE_UNAVAILABLE)
+     correlationId: 25169dbc-e9d8-4e63-9562-016010f5f97b
+PASS T9 outage wrote nothing (got: 7)
+PASS T9 outage consumed no seat (got: 2)
+
+--- Recovery ---
+PASS T10 same request succeeds after the store is restored -> 201 (got: 201)
+PASS T10 not treated as a duplicate (no partial state left by the outage) (got: CONFIRMED)
+
+--- Programme capacity (session full) ---
+PASS T16 all 5 seats can be filled (got: 0)
+PASS T16 next eligible applicant -> 409 (got: 409)
+PASS T16 reason SESSION_FULL (got: SESSION_FULL)
+
+--- Security and control checks ---
+PASS T11 live IAM policy: no wildcard actions/resources, no scan/query/delete (got: OK)
+PASS T12 full national IDs never appear in Lambda logs (got: 0)
+PASS T12 reference numbers and PINs never appear in Lambda logs (got: 0)
+PASS T12 logs do contain the correlation/hash-prefix trace (got: yes)
+PASS T13 secret scan: no AWS keys or private keys in repository files (got: 0)
+PASS T13 .env (populated config) is not committed (got: not-tracked)
+
+--- Teardown and rebuild ---
+==> Stopping containers and removing volumes
+ Container dlp-localstack Stopping 
+ Container dlp-localstack Stopped 
+ Container dlp-localstack Removing 
+ Container dlp-localstack Removed 
+ Network dlp-registration_default Removing 
+ Network dlp-registration_default Removed 
+==> Removing local runtime state
+==> Verifying nothing remains
+    no dlp containers remain
+    no local state remains
+
+Teardown complete. Rebuild with: docker compose up -d && ./scripts/setup.sh
+PASS T14 teardown script succeeded (got: 0)
+PASS T14 no dlp containers remain (got: )
+PASS T14 no local runtime state remains (got: no)
+ Network dlp-registration_default Creating 
+ Network dlp-registration_default Creating 
+ Network dlp-registration_default Created 
+ Network dlp-registration_default Created 
+ Container dlp-localstack Creating 
+ Container dlp-localstack Created 
+ Container dlp-localstack Starting 
+ Container dlp-localstack Started 
+==> Checking prerequisites
+    all prerequisites present
+==> Waiting for LocalStack to become healthy
+    ready
+==> Creating DynamoDB table: dlp-registrations
+    created
+==> Applying least-privilege IAM policy
+    role created
+==> Initialising capacity counter
+==> Deploying Lambda function: dlp-registration-processor
+    created
+==> Configuring API Gateway routes: POST /registrations, /registrations/status and /registrations/check
+    created: 8hvrxfc4zd
+    /status route created
+    /check route created
+
+Setup complete.
+  Endpoint: http://localhost:4566
+  Table:    dlp-registrations
+  Function: dlp-registration-processor
+  API:      http://localhost:4566/restapis/8hvrxfc4zd/local/_user_request_/registrations
+  Status:   http://localhost:4566/restapis/8hvrxfc4zd/local/_user_request_/registrations/status
+Environment verification
+------------------------
+  PASS  Docker is running
+  PASS  LocalStack container is up
+  PASS  LocalStack is healthy
+  PASS  DynamoDB table exists
+  PASS  IAM role exists
+  PASS  Lambda function exists
+  PASS  API Gateway exists
+------------------------
+  7 passed, 0 failed
+PASS T14 verify.sh: all checks pass after rebuild (got: yes)
+PASS T14 minimum slice works again after rebuild -> 201 (got: 201)
+     correlationId: 972f7471-4452-4e6a-8f4e-cfaa23cc45fc
+
+=== Result: 65 passed, 0 failed ===
